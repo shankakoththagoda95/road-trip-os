@@ -8,6 +8,8 @@ from app.core.database import DATABASE_URL
 from app.models.base import Base
 from app.models.user import User
 from app.models.vehicle import Vehicle
+from app.models.trip import Trip
+from app.models.trip_destination import TripDestination
 
 
 # Alembic Config object
