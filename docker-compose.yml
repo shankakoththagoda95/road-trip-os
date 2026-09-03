@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: road-trip-os-postgres
+    environment:
+      POSTGRES_USER: roadtrip
+      POSTGRES_PASSWORD: roadtrip_password
+      POSTGRES_DB: roadtrip
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
