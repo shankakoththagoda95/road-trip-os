@@ -1,3 +1,5 @@
+from app.schemas.route import RoutePreference
+
 import httpx
 
 
@@ -55,6 +57,7 @@ def calculate_route(
 
 def calculate_multi_stop_route(
     coordinates: list[tuple[float, float]],
+    preference: RoutePreference,
 ) -> dict:
     """
     Calculate a driving route through multiple coordinates.
@@ -62,6 +65,10 @@ def calculate_multi_stop_route(
     Coordinates must be provided as:
     (latitude, longitude)
     """
+    if preference != RoutePreference.FASTEST:
+        raise ValueError(
+            "Shortest routing is not implemented yet"
+        )
 
     if len(coordinates) < 2:
         raise ValueError(

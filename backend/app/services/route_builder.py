@@ -1,3 +1,4 @@
+from app.schemas.route import RoutePreference
 from app.services.geocoding import geocode_location
 from app.services.routing import calculate_multi_stop_route
 
@@ -33,6 +34,7 @@ def calculate_trip_route(
     start_coordinates: tuple[float, float],
     destination_coordinates: tuple[float, float],
     stop_coordinates: list[tuple[float, float]],
+    preference: RoutePreference,
 ) -> dict:
     """
     Build and calculate a complete trip route.
@@ -44,4 +46,7 @@ def calculate_trip_route(
         stop_coordinates,
     )
 
-    return calculate_multi_stop_route(coordinates)
+    return calculate_multi_stop_route(
+        coordinates,
+        preference,
+    )

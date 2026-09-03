@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.models.trip import Trip
 from app.models.user import User
 from app.schemas.trip import TripCreate, TripResponse, TripUpdate
-from app.schemas.route import TripRouteResponse
+from app.schemas.route import RoutePreference, TripRouteResponse
 from app.models.trip_destination import TripDestination
 from app.services.route_builder import (
     calculate_trip_route,
@@ -150,6 +150,7 @@ def delete_trip(
 )
 def calculate_trip_route_endpoint(
     trip_id: int,
+    preference: RoutePreference = RoutePreference.FASTEST,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -210,12 +211,20 @@ def calculate_trip_route_endpoint(
             for destination in destinations
         ],
         trip.destination,
+
     ]
-    route = calculate_trip_route(
-        start_coordinates,
-        destination_coordinates,
-        stop_coordinates,
+    try:
+        route = calculate_trip_route(
+            start_coordinates,
+            destination_coordinates,
+            stop_coordinates,
+            preference,
     )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
 
     return {
         "trip_id": trip.id,

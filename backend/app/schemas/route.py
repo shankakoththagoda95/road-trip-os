@@ -1,4 +1,11 @@
+from enum import Enum
+
 from pydantic import BaseModel
+
+
+class RoutePreference(str, Enum):
+    FASTEST = "fastest"
+    SHORTEST = "shortest"
 
 
 class TripRouteLegResponse(BaseModel):
