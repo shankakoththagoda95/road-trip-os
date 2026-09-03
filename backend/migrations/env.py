@@ -7,6 +7,7 @@ from sqlalchemy import pool
 from app.core.database import DATABASE_URL
 from app.models.base import Base
 from app.models.user import User
+from app.models.vehicle import Vehicle
 
 
 # Alembic Config object
