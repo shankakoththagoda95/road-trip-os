@@ -8,7 +8,10 @@ from app.models.trip import Trip
 from app.models.user import User
 from app.schemas.trip import TripCreate, TripResponse, TripType, TripUpdate
 from app.schemas.route import RoutePreference, TripRouteResponse
-from app.services.route_constraints import check_distance_limit
+from app.services.route_constraints import (
+    check_distance_limit,
+    split_route_into_days,
+)
 from app.models.trip_destination import TripDestination
 from app.services.route_builder import (
     calculate_trip_route,
@@ -230,6 +233,17 @@ def calculate_trip_route_endpoint(
             detail=str(error),
         )
 
+    try:
+        days = split_route_into_days(
+            route["legs"],
+            trip.max_distance_per_day,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
     return {
         "trip_id": trip.id,
         "locations": locations,
@@ -247,5 +261,13 @@ def calculate_trip_route_endpoint(
                 ),
             }
             for index, leg in enumerate(route["legs"])
+        ],
+        "days": [
+            {
+                "day_number": day.day_number,
+                "total_distance_meters": day.total_distance_meters,
+                "distance_status": day.distance_status,
+            }
+            for day in days
         ],
     }
