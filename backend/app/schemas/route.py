@@ -22,6 +22,7 @@ class DrivingDayResponse(BaseModel):
     day_number: int
     total_distance_meters: float
     distance_status: DistanceStatus
+    legs: list[TripRouteLegResponse]
 
 
 class TripRouteResponse(BaseModel):

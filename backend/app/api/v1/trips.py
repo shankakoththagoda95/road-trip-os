@@ -234,8 +234,18 @@ def calculate_trip_route_endpoint(
         )
 
     try:
+        legs = [
+            {
+                "from_location": locations[index],
+                "to_location": locations[index + 1],
+                "distance_meters": leg["distance_meters"],
+                "duration_seconds": leg["duration_seconds"],
+            }
+            for index, leg in enumerate(route["legs"])
+        ]
+
         days = split_route_into_days(
-            route["legs"],
+            legs,
             trip.max_distance_per_day,
         )
     except ValueError as error:
@@ -267,6 +277,19 @@ def calculate_trip_route_endpoint(
                 "day_number": day.day_number,
                 "total_distance_meters": day.total_distance_meters,
                 "distance_status": day.distance_status,
+                "legs": [
+                    {
+                        "from_location": leg["from_location"],
+                        "to_location": leg["to_location"],
+                        "distance_meters": leg["distance_meters"],
+                        "duration_seconds": leg["duration_seconds"],
+                        "distance_status": check_distance_limit(
+                            leg["distance_meters"],
+                            trip.max_distance_per_day,
+                        ),
+                    }
+                    for leg in day.legs
+                ],
             }
             for day in days
         ],
