@@ -7,6 +7,8 @@ from app.api.v1.vehicles import router as vehicles_router
 from app.core.database import engine
 from app.api.v1.trips import router as trips_router
 from app.api.v1.trip_destinations import router as trip_destinations_router
+from app.api.v1.itineraries import router as itineraries_router
+from app.api.v1 import itineraries
 
 
 app = FastAPI()
@@ -17,6 +19,7 @@ app.include_router(auth_router)
 app.include_router(vehicles_router)
 app.include_router(trips_router)
 app.include_router(trip_destinations_router)
+app.include_router(itineraries_router)
 
 @app.get("/")
 def root():
