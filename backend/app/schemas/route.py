@@ -2,7 +2,10 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from app.services.route_constraints import DistanceStatus
+from app.services.route_constraints import (
+    DistanceStatus,
+    DrivingTimeStatus,
+)
 
 
 class RoutePreference(str, Enum):
@@ -21,7 +24,9 @@ class TripRouteLegResponse(BaseModel):
 class DrivingDayResponse(BaseModel):
     day_number: int
     total_distance_meters: float
+    total_duration_seconds: float
     distance_status: DistanceStatus
+    driving_time_status: DrivingTimeStatus
     legs: list[TripRouteLegResponse]
 
 

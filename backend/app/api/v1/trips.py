@@ -245,9 +245,10 @@ def calculate_trip_route_endpoint(
         ]
 
         days = split_route_into_days(
-            legs,
-            trip.max_distance_per_day,
-        )
+    legs,
+        trip.max_distance_per_day,
+        trip.max_driving_hours_per_day,
+    )
     except ValueError as error:
         raise HTTPException(
             status_code=400,
@@ -276,6 +277,8 @@ def calculate_trip_route_endpoint(
             {
                 "day_number": day.day_number,
                 "total_distance_meters": day.total_distance_meters,
+                "total_duration_seconds": day.total_duration_seconds,
+                "driving_time_status": day.driving_time_status,
                 "distance_status": day.distance_status,
                 "legs": [
                     {
