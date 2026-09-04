@@ -200,4 +200,21 @@ def test_route_without_constraints_returns_one_day():
     assert days[0].total_duration_seconds == 5 * 3600
     assert days[0].distance_status == DistanceStatus.WITHIN_LIMIT
     assert days[0].driving_time_status == DrivingTimeStatus.WITHIN_LIMIT
-    
+
+
+def test_distance_exactly_at_tolerance_limit():
+    result = check_distance_limit(
+        550_000,
+        500,
+    )
+
+    assert result == DistanceStatus.WITHIN_TOLERANCE
+
+
+def test_distance_just_above_tolerance_limit():
+    result = check_distance_limit(
+        550_001,
+        500,
+    )
+
+    assert result == DistanceStatus.EXCEEDS_LIMIT
