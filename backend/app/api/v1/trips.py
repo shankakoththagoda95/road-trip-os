@@ -6,17 +6,11 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.models.trip import Trip
 from app.models.user import User
-from app.schemas.trip import TripCreate, TripResponse, TripType, TripUpdate
+from app.schemas.trip import TripCreate, TripResponse, TripUpdate
 from app.schemas.route import RoutePreference, TripRouteResponse
-from app.services.route_constraints import (
-    check_distance_limit,
-    split_route_into_days,
-)
+from app.services.route_constraints import check_distance_limit
+from app.services.trip_route import calculate_trip_route_details
 from app.models.trip_destination import TripDestination
-from app.services.route_builder import (
-    calculate_trip_route,
-    resolve_location,
-)
 
 
 router = APIRouter(
@@ -178,54 +172,10 @@ def calculate_trip_route_endpoint(
     ).all()
 
     try:
-        start_coordinates = resolve_location(
-            trip.start_location
-        )
-
-        destination_coordinates = resolve_location(
-            trip.destination
-        )
-    except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        )
-    for destination in destinations:
-        if (
-            destination.latitude is None
-            or destination.longitude is None
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Destination '{destination.location}' "
-                    "does not have valid coordinates"
-                ),
-            )
-
-
-    stop_coordinates = [
-        (destination.latitude, destination.longitude)
-        for destination in destinations
-    ]
-    locations = [
-        trip.start_location,
-        *[
-            destination.location
-            for destination in destinations
-        ],
-        trip.destination,
-    ]
-
-    if trip.trip_type == TripType.ROUND_TRIP:
-        locations.append(trip.start_location)
-    try:
-        route = calculate_trip_route(
-            start_coordinates,
-            destination_coordinates,
-            stop_coordinates,
+        route_details = calculate_trip_route_details(
+            trip,
+            destinations,
             preference,
-            trip.trip_type,
         )
     except ValueError as error:
         raise HTTPException(
@@ -233,27 +183,10 @@ def calculate_trip_route_endpoint(
             detail=str(error),
         )
 
-    try:
-        legs = [
-            {
-                "from_location": locations[index],
-                "to_location": locations[index + 1],
-                "distance_meters": leg["distance_meters"],
-                "duration_seconds": leg["duration_seconds"],
-            }
-            for index, leg in enumerate(route["legs"])
-        ]
-
-        days = split_route_into_days(
-    legs,
-        trip.max_distance_per_day,
-        trip.max_driving_hours_per_day,
-    )
-    except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error),
-        )
+    route = route_details["route"]
+    locations = route_details["locations"]
+    legs = route_details["legs"]
+    days = route_details["days"]
 
     return {
         "trip_id": trip.id,
