@@ -151,3 +151,26 @@ def test_route_splits_using_distance_without_driving_time_limit():
     assert len(days) == 2
     assert days[0].total_distance_meters == 300_000
     assert days[1].total_distance_meters == 300_000
+
+
+def test_route_splits_when_distance_limit_is_exceeded():
+    legs = [
+        {
+            "distance_meters": 300_000,
+            "duration_seconds": 2 * 3600,
+        },
+        {
+            "distance_meters": 300_000,
+            "duration_seconds": 2 * 3600,
+        },
+    ]
+
+    days = split_route_into_days(
+        legs,
+        max_distance_per_day=500,
+        max_driving_hours_per_day=8,
+    )
+
+    assert len(days) == 2
+    assert days[0].total_distance_meters == 300_000
+    assert days[1].total_distance_meters == 300_000
