@@ -2,6 +2,7 @@ import pytest
 
 from app.models.trip_destination import TripDestination
 from app.services.route_optimization import (
+    calculate_candidate_score,
     calculate_destination_distance,
     calculate_start_distance,
     optimize_destinations,
@@ -47,6 +48,7 @@ def test_optimize_destinations_orders_from_trip_start():
     result = optimize_destinations(
         (59.3293, 18.0686),
         [oslo, orebro],
+        (59.9139, 10.7522),
     )
 
     assert [destination.location for destination in result] == [
@@ -59,6 +61,7 @@ def test_optimize_destinations_returns_empty_list_for_no_destinations():
     result = optimize_destinations(
         (59.3293, 18.0686),
         [],
+        (59.9139, 10.7522),
     )
 
     assert result == []
@@ -85,6 +88,7 @@ def test_optimize_destinations_does_not_modify_original_list():
     result = optimize_destinations(
         (59.3293, 18.0686),
         destinations,
+        (59.9139, 10.7522),
     )
 
     assert destinations == original_order
@@ -102,6 +106,7 @@ def test_optimize_destinations_handles_single_destination():
     result = optimize_destinations(
         (59.3293, 18.0686),
         [oslo],
+        (59.9139, 10.7522),
     )
 
     assert len(result) == 1
@@ -126,6 +131,7 @@ def test_optimize_destinations_handles_already_optimized_destinations():
     result = optimize_destinations(
         (59.3293, 18.0686),
         [orebro, oslo],
+        (59.9139, 10.7522),
     )
 
     assert [destination.location for destination in result] == [
@@ -147,6 +153,7 @@ def test_optimize_destinations_requires_coordinates():
         optimize_destinations(
             (59.3293, 18.0686),
             [oslo],
+            (59.9139, 10.7522),
         )
 
 
@@ -255,4 +262,94 @@ def test_calculate_start_distance_requires_coordinates():
         calculate_start_distance(
             (59.3293, 18.0686),
             oslo,
+        )
+
+
+def test_calculate_candidate_score():
+    stockholm = create_destination(
+        "Stockholm",
+        1,
+        59.3293,
+        18.0686,
+    )
+
+    orebro = create_destination(
+        "Örebro",
+        2,
+        59.2753,
+        15.2134,
+    )
+
+    oslo = create_destination(
+        "Oslo",
+        3,
+        59.9139,
+        10.7522,
+    )
+
+    score = calculate_candidate_score(
+        (stockholm.latitude, stockholm.longitude),
+        orebro,
+        (oslo.latitude, oslo.longitude),
+    )
+
+    expected_score = (
+        calculate_start_distance(
+            (stockholm.latitude, stockholm.longitude),
+            orebro,
+        )
+        + calculate_destination_distance(
+            orebro,
+            oslo,
+        )
+    )
+
+    assert score == pytest.approx(expected_score)
+
+
+def test_calculate_candidate_score_prefers_lower_score():
+    stockholm = create_destination(
+        "Stockholm",
+        1,
+        59.3293,
+        18.0686,
+    )
+
+    orebro = create_destination(
+        "Örebro",
+        2,
+        59.2753,
+        15.2134,
+    )
+
+    oslo = create_destination(
+        "Oslo",
+        3,
+        59.9139,
+        10.7522,
+    )
+
+    score = calculate_candidate_score(
+        (stockholm.latitude, stockholm.longitude),
+        orebro,
+        (oslo.latitude, oslo.longitude),
+    )
+
+    assert score > 0
+
+
+def test_calculate_candidate_score_requires_coordinates():
+    candidate = create_destination(
+        "Örebro",
+        1,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Candidate destination must have valid coordinates",
+    ):
+        calculate_candidate_score(
+            (59.3293, 18.0686),
+            candidate,
+            (59.9139, 10.7522),
         )

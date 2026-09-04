@@ -56,14 +56,59 @@ def calculate_start_distance(
     )
 
 
+def calculate_candidate_score(
+    current_coordinates: Coordinates,
+    candidate: TripDestination,
+    destination_coordinates: Coordinates,
+) -> float:
+    """
+    Calculate a candidate stop's score.
+
+    Lower scores are better.
+
+    The score combines:
+    - distance from the current location to the candidate
+    - distance from the candidate to the final destination
+    """
+
+    if (
+        candidate.latitude is None
+        or candidate.longitude is None
+    ):
+        raise ValueError(
+            "Candidate destination must have valid coordinates"
+        )
+
+    distance_to_candidate = calculate_distance_km(
+        current_coordinates[0],
+        current_coordinates[1],
+        candidate.latitude,
+        candidate.longitude,
+    )
+
+    distance_to_destination = calculate_distance_km(
+        candidate.latitude,
+        candidate.longitude,
+        destination_coordinates[0],
+        destination_coordinates[1],
+    )
+
+    return (
+        distance_to_candidate
+        + distance_to_destination
+    )
+
+
 def optimize_destinations(
     start_coordinates: Coordinates,
     destinations: list[TripDestination],
+    destination_coordinates: Coordinates,
 ) -> list[TripDestination]:
     """
     Return destinations in geographically optimized order
     using a nearest-neighbor heuristic starting from the
-    trip's starting coordinates.
+    trip's starting coordinates and considering the final
+    destination.
     """
 
     if not destinations:
