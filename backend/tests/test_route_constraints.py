@@ -174,3 +174,30 @@ def test_route_splits_when_distance_limit_is_exceeded():
     assert len(days) == 2
     assert days[0].total_distance_meters == 300_000
     assert days[1].total_distance_meters == 300_000
+
+
+def test_route_without_constraints_returns_one_day():
+    legs = [
+        {
+            "distance_meters": 300_000,
+            "duration_seconds": 2 * 3600,
+        },
+        {
+            "distance_meters": 400_000,
+            "duration_seconds": 3 * 3600,
+        },
+    ]
+
+    days = split_route_into_days(
+        legs,
+        max_distance_per_day=None,
+        max_driving_hours_per_day=None,
+    )
+
+    assert len(days) == 1
+    assert days[0].day_number == 1
+    assert days[0].total_distance_meters == 700_000
+    assert days[0].total_duration_seconds == 5 * 3600
+    assert days[0].distance_status == DistanceStatus.WITHIN_LIMIT
+    assert days[0].driving_time_status == DrivingTimeStatus.WITHIN_LIMIT
+    
