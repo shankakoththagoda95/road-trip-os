@@ -6,7 +6,7 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.models.trip import Trip
 from app.models.user import User
-from app.schemas.trip import TripCreate, TripResponse, TripUpdate
+from app.schemas.trip import TripCreate, TripResponse, TripType, TripUpdate
 from app.schemas.route import RoutePreference, TripRouteResponse
 from app.models.trip_destination import TripDestination
 from app.services.route_builder import (
@@ -211,15 +211,18 @@ def calculate_trip_route_endpoint(
             for destination in destinations
         ],
         trip.destination,
-
     ]
+
+    if trip.trip_type == TripType.ROUND_TRIP:
+        locations.append(trip.start_location)
     try:
         route = calculate_trip_route(
             start_coordinates,
             destination_coordinates,
             stop_coordinates,
             preference,
-    )
+            trip.trip_type,
+        )
     except ValueError as error:
         raise HTTPException(
             status_code=400,
