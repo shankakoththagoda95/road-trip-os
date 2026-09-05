@@ -4,6 +4,7 @@ from app.models.trip import Trip
 from app.models.trip_destination import TripDestination
 from app.models.itinerary import Itinerary
 from app.models.itinerary_day import ItineraryDay
+from app.models.trip_fuel import TripFuel
 
 
 __all__ = [
@@ -13,4 +14,5 @@ __all__ = [
     "TripDestination",
     "Itinerary",
     "ItineraryDay",
+    "TripFuel",
 ]
