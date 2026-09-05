@@ -16,6 +16,7 @@ class TripCreate(BaseModel):
     departure_at: datetime
     travelers: int = Field(ge=1)
     duration_days: int = Field(ge=1)
+    vehicle_id: int | None = Field(default=None, gt=0)
     max_driving_hours_per_day: float | None = Field(default=None, ge=0)
     max_distance_per_day: float | None = Field(default=None, ge=0)
 
@@ -36,6 +37,7 @@ class TripUpdate(BaseModel):
     departure_at: datetime
     travelers: int = Field(ge=1)
     duration_days: int = Field(ge=1)
+    vehicle_id: int | None = Field(default=None, gt=0)
     max_driving_hours_per_day: float | None = Field(default=None, ge=0)
     max_distance_per_day: float | None = Field(default=None, ge=0)
 
@@ -58,5 +60,6 @@ class TripResponse(BaseModel):
     departure_at: datetime
     travelers: int
     duration_days: int
+    vehicle_id: int | None
     max_driving_hours_per_day: float | None
     max_distance_per_day: float | None

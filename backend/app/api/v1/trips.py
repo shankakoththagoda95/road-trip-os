@@ -11,6 +11,7 @@ from app.schemas.route import RoutePreference, TripRouteResponse
 from app.services.route_constraints import check_distance_limit
 from app.services.trip_route import calculate_trip_route_details
 from app.models.trip_destination import TripDestination
+from app.models.vehicle import Vehicle
 
 
 router = APIRouter(
@@ -25,6 +26,20 @@ def create_trip(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if trip_data.vehicle_id is not None:
+        vehicle = db.scalar(
+            select(Vehicle).where(
+                Vehicle.id == trip_data.vehicle_id,
+                Vehicle.user_id == current_user.id,
+            )
+        )
+
+        if vehicle is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Vehicle not found",
+            )
+    
     new_trip = Trip(
         user_id=current_user.id,
         name=trip_data.name,
@@ -34,6 +49,7 @@ def create_trip(
         departure_at=trip_data.departure_at,
         travelers=trip_data.travelers,
         duration_days=trip_data.duration_days,
+        vehicle_id=trip_data.vehicle_id,
         max_driving_hours_per_day=trip_data.max_driving_hours_per_day,
         max_distance_per_day=trip_data.max_distance_per_day,
     )
@@ -101,6 +117,20 @@ def update_trip(
             detail="Trip not found",
         )
 
+    if trip_data.vehicle_id is not None:
+        vehicle = db.scalar(
+            select(Vehicle).where(
+                Vehicle.id == trip_data.vehicle_id,
+                Vehicle.user_id == current_user.id,
+            )
+        )
+    
+        if vehicle is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Vehicle not found",
+            )
+
     trip.name = trip_data.name
     trip.start_location = trip_data.start_location
     trip.destination = trip_data.destination
@@ -110,6 +140,7 @@ def update_trip(
     trip.duration_days = trip_data.duration_days
     trip.max_driving_hours_per_day = trip_data.max_driving_hours_per_day
     trip.max_distance_per_day = trip_data.max_distance_per_day
+    trip.vehicle_id = trip_data.vehicle_id
 
     db.commit()
     db.refresh(trip)

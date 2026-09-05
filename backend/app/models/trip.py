@@ -16,6 +16,12 @@ class Trip(Base):
         index=True,
     )
 
+    vehicle_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vehicles.id"),
+        nullable=True,
+        index=True,
+    )
+
     name: Mapped[str] = mapped_column(String(150))
 
     start_location: Mapped[str] = mapped_column(String(255))
