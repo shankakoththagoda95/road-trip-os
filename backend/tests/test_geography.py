@@ -1,6 +1,9 @@
 import pytest
 
-from app.services.geography import calculate_distance_km
+from app.services.geography import (
+    calculate_distance_km,
+    calculate_total_distance_km,
+)
 
 
 def test_distance_between_same_coordinates_is_zero():
@@ -65,3 +68,70 @@ def test_distance_handles_negative_coordinates():
     )
 
     assert distance == pytest.approx(714, abs=10)
+
+
+def test_total_distance_with_multiple_points():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.3326, 18.0649),
+        (59.3346, 18.0632),
+    ]
+
+    result = calculate_total_distance_km(coordinates)
+
+    assert result > 0
+
+
+def test_total_distance_with_two_points():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.3326, 18.0649),
+    ]
+
+    result = calculate_total_distance_km(coordinates)
+
+    assert result > 0
+
+
+def test_total_distance_with_one_point():
+    coordinates = [
+        (59.3293, 18.0686),
+    ]
+
+    result = calculate_total_distance_km(coordinates)
+
+    assert result == 0.0
+
+
+def test_total_distance_with_no_points():
+    result = calculate_total_distance_km([])
+
+    assert result == 0.0
+
+
+def test_total_distance_is_sum_of_segments():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.3326, 18.0649),
+        (59.3346, 18.0632),
+    ]
+
+    first_segment = calculate_distance_km(
+        59.3293,
+        18.0686,
+        59.3326,
+        18.0649,
+    )
+
+    second_segment = calculate_distance_km(
+        59.3326,
+        18.0649,
+        59.3346,
+        18.0632,
+    )
+
+    result = calculate_total_distance_km(coordinates)
+
+    assert result == pytest.approx(
+        first_segment + second_segment
+    )

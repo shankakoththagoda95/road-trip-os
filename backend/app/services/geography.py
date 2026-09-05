@@ -33,3 +33,25 @@ def calculate_distance_km(
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
     return EARTH_RADIUS_KM * c
+
+
+def calculate_total_distance_km(
+    coordinates: list[tuple[float, float]],
+) -> float:
+    if len(coordinates) < 2:
+        return 0.0
+
+    total_distance = 0.0
+
+    for index in range(len(coordinates) - 1):
+        start = coordinates[index]
+        end = coordinates[index + 1]
+
+        total_distance += calculate_distance_km(
+            start[0],
+            start[1],
+            end[0],
+            end[1],
+        )
+
+    return total_distance
