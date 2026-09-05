@@ -3,6 +3,8 @@ import pytest
 from app.services.geography import (
     calculate_distance_km,
     calculate_total_distance_km,
+    remove_consecutive_duplicate_coordinates,
+    filter_gps_coordinates_by_distance,
 )
 
 
@@ -135,3 +137,95 @@ def test_total_distance_is_sum_of_segments():
     assert result == pytest.approx(
         first_segment + second_segment
     )
+
+
+def test_remove_consecutive_duplicate_coordinates():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.3293, 18.0686),
+        (59.3300, 18.0700),
+        (59.3300, 18.0700),
+        (59.3310, 18.0710),
+    ]
+
+    result = remove_consecutive_duplicate_coordinates(coordinates)
+
+    assert result == [
+        (59.3293, 18.0686),
+        (59.3300, 18.0700),
+        (59.3310, 18.0710),
+    ]
+
+
+def test_remove_consecutive_duplicate_coordinates_keeps_non_consecutive_duplicates():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.3300, 18.0700),
+        (59.3293, 18.0686),
+    ]
+
+    result = remove_consecutive_duplicate_coordinates(coordinates)
+
+    assert result == coordinates
+
+
+def test_remove_consecutive_duplicate_coordinates_empty():
+    result = remove_consecutive_duplicate_coordinates([])
+
+    assert result == []
+
+
+def test_filter_gps_coordinates_by_distance_keeps_first_coordinate():
+    coordinates = [
+        (59.3293, 18.0686),
+    ]
+
+    result = filter_gps_coordinates_by_distance(coordinates)
+
+    assert result == coordinates
+
+
+def test_filter_gps_coordinates_by_distance_ignores_small_movement():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.32931, 18.06861),
+    ]
+
+    result = filter_gps_coordinates_by_distance(coordinates)
+
+    assert result == [
+        (59.3293, 18.0686),
+    ]
+
+
+def test_filter_gps_coordinates_by_distance_accepts_large_movement():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.3310, 18.0700),
+    ]
+
+    result = filter_gps_coordinates_by_distance(coordinates)
+
+    assert result == coordinates
+
+
+def test_filter_gps_coordinates_by_distance_compares_to_last_accepted_point():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.32931, 18.06861),
+        (59.32932, 18.06862),
+        (59.3310, 18.0700),
+    ]
+
+    result = filter_gps_coordinates_by_distance(coordinates)
+
+    assert result == [
+        (59.3293, 18.0686),
+        (59.3310, 18.0700),
+    ]
+
+
+def test_filter_gps_coordinates_by_distance_empty():
+    result = filter_gps_coordinates_by_distance([])
+
+    assert result == []

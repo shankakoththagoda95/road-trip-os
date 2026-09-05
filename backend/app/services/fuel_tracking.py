@@ -2,7 +2,11 @@ from app.services.fuel import (
     calculate_fuel_range,
     calculate_fuel_remaining,
 )
-from app.services.geography import calculate_total_distance_km
+from app.services.geography import (
+    calculate_total_distance_km,
+    filter_gps_coordinates_by_distance,
+    remove_consecutive_duplicate_coordinates,
+)
 
 
 def estimate_fuel_remaining(
@@ -10,7 +14,17 @@ def estimate_fuel_remaining(
     starting_fuel: float,
     consumption_l_per_100km: float,
 ) -> tuple[float, float, float]:
-    distance_traveled_km = calculate_total_distance_km(coordinates)
+    cleaned_coordinates = remove_consecutive_duplicate_coordinates(
+        coordinates
+    )
+    
+    filtered_coordinates = filter_gps_coordinates_by_distance(
+        cleaned_coordinates
+    )
+    
+    distance_traveled_km = calculate_total_distance_km(
+        filtered_coordinates
+    )
 
     fuel_remaining = calculate_fuel_remaining(
         starting_fuel=starting_fuel,

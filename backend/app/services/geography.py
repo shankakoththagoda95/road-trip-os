@@ -2,6 +2,7 @@ from math import atan2, cos, radians, sin, sqrt
 
 
 EARTH_RADIUS_KM = 6371.0
+GPS_MIN_MOVEMENT_METERS = 20.0
 
 
 def calculate_distance_km(
@@ -55,3 +56,44 @@ def calculate_total_distance_km(
         )
 
     return total_distance
+
+
+def remove_consecutive_duplicate_coordinates(
+    coordinates: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    if not coordinates:
+        return []
+
+    cleaned_coordinates = [coordinates[0]]
+
+    for coordinate in coordinates[1:]:
+        if coordinate != cleaned_coordinates[-1]:
+            cleaned_coordinates.append(coordinate)
+
+    return cleaned_coordinates
+
+
+def filter_gps_coordinates_by_distance(
+    coordinates: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    if not coordinates:
+        return []
+
+    filtered_coordinates = [coordinates[0]]
+
+    for coordinate in coordinates[1:]:
+        last_accepted = filtered_coordinates[-1]
+
+        distance_km = calculate_distance_km(
+            last_accepted[0],
+            last_accepted[1],
+            coordinate[0],
+            coordinate[1],
+        )
+
+        distance_meters = distance_km * 1000
+
+        if distance_meters >= GPS_MIN_MOVEMENT_METERS:
+            filtered_coordinates.append(coordinate)
+
+    return filtered_coordinates
