@@ -58,3 +58,17 @@ def test_estimate_fuel_remaining_does_not_go_below_zero():
     assert distance_traveled > 0
     assert fuel_remaining == 0
     assert remaining_range == 0
+
+
+def test_estimate_fuel_remaining_with_no_locations():
+    distance_traveled, fuel_remaining, remaining_range = (
+        estimate_fuel_remaining(
+            coordinates=[],
+            starting_fuel=55,
+            consumption_l_per_100km=6,
+        )
+    )
+
+    assert distance_traveled == 0
+    assert fuel_remaining == 55
+    assert remaining_range == pytest.approx(916.6666667)

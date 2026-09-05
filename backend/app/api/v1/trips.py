@@ -18,6 +18,10 @@ from app.schemas.fuel import TripFuelEstimateResponse
 from app.services.fuel import calculate_trip_fuel_cost
 from app.models.trip_location import TripLocation
 from app.schemas.trip_location import TripLocationCreate, TripLocationResponse
+from app.models.trip_location import TripLocation
+from app.schemas.fuel_range import TripFuelStatusResponse
+from app.services.fuel_tracking import estimate_fuel_remaining
+from app.models.trip_fuel import TripFuel
 
 
 router = APIRouter(
@@ -296,6 +300,94 @@ def get_trip_fuel_estimate(
         "fuel_required": fuel_required,
         "fuel_price_per_liter": fuel_price_per_liter,
         "estimated_fuel_cost": fuel_cost,
+    }
+
+
+@router.get(
+    "/{trip_id}/fuel-status",
+    response_model=TripFuelStatusResponse,
+)
+def get_trip_fuel_status(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    if trip.vehicle_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Trip does not have a vehicle",
+        )
+
+    vehicle = db.scalar(
+        select(Vehicle).where(
+            Vehicle.id == trip.vehicle_id,
+            Vehicle.user_id == current_user.id,
+        )
+    )
+
+    if vehicle is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Vehicle not found",
+        )
+
+    if vehicle.fuel_consumption is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Vehicle does not have fuel consumption data",
+        )
+
+    trip_fuel = db.scalar(
+        select(TripFuel).where(
+            TripFuel.trip_id == trip.id,
+        )
+    )
+
+    if trip_fuel is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Trip does not have starting fuel data",
+        )
+
+    locations = db.scalars(
+        select(TripLocation)
+        .where(TripLocation.trip_id == trip.id)
+        .order_by(TripLocation.recorded_at)
+    ).all()
+
+    coordinates = [
+        (location.latitude, location.longitude)
+        for location in locations
+    ]
+
+    (
+        distance_traveled_km,
+        fuel_remaining,
+        remaining_range_km,
+    ) = estimate_fuel_remaining(
+        coordinates=coordinates,
+        starting_fuel=trip_fuel.starting_fuel,
+        consumption_l_per_100km=vehicle.fuel_consumption,
+    )
+
+    return {
+        "trip_id": trip.id,
+        "distance_traveled_km": distance_traveled_km,
+        "fuel_remaining": fuel_remaining,
+        "remaining_range_km": remaining_range_km,
     }
 
 

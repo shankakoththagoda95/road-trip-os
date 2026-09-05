@@ -15,6 +15,8 @@ from app.models.trip import Trip
 from app.models.trip_location import TripLocation
 from app.models.user import User
 from app.schemas.trip_location import TripLocationCreate
+from app.models.trip_fuel import TripFuel
+from app.models.vehicle import Vehicle
 
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -332,6 +334,397 @@ def test_record_trip_location_is_saved_to_database(client):
         assert saved_location.latitude == 59.3293
         assert saved_location.longitude == 18.0686
         assert saved_location.recorded_at is not None
+
+    finally:
+        db.close()
+
+
+def test_get_trip_fuel_status(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=user.id,
+            name="My Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=6,
+            tank_capacity=55,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        trip = Trip(
+            user_id=user.id,
+            vehicle_id=vehicle.id,
+            name="Stockholm to Oslo",
+            start_location="Stockholm",
+            destination="Oslo",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=2,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        trip_fuel = TripFuel(
+            trip_id=trip.id,
+            starting_fuel=55,
+            current_fuel=55,
+            fuel_used=0,
+            fuel_cost=0,
+        )
+
+        locations = [
+            TripLocation(
+                trip_id=trip.id,
+                latitude=59.3293,
+                longitude=18.0686,
+                recorded_at=datetime(2026, 9, 5, 12, 0, 0),
+            ),
+            TripLocation(
+                trip_id=trip.id,
+                latitude=59.4370,
+                longitude=18.0777,
+                recorded_at=datetime(2026, 9, 5, 13, 0, 0),
+            ),
+        ]
+
+        db.add(trip_fuel)
+        db.add_all(locations)
+        db.commit()
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/fuel-status",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["trip_id"] == trip.id
+        assert data["distance_traveled_km"] > 0
+        assert data["fuel_remaining"] < 55
+        assert data["remaining_range_km"] > 0
+
+    finally:
+        db.close()
+
+
+def test_get_trip_fuel_status_with_no_locations(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=user.id,
+            name="My Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=6,
+            tank_capacity=55,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        trip = Trip(
+            user_id=user.id,
+            vehicle_id=vehicle.id,
+            name="Stockholm to Oslo",
+            start_location="Stockholm",
+            destination="Oslo",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=2,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        trip_fuel = TripFuel(
+            trip_id=trip.id,
+            starting_fuel=55,
+            current_fuel=55,
+            fuel_used=0,
+            fuel_cost=0,
+        )
+
+        db.add(trip_fuel)
+        db.commit()
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/fuel-status",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["distance_traveled_km"] == 0
+        assert data["fuel_remaining"] == 55
+        assert data["remaining_range_km"] == pytest.approx(916.6666667)
+
+    finally:
+        db.close()
+
+
+def test_get_trip_fuel_status_requires_vehicle(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        trip = Trip(
+            user_id=user.id,
+            name="Stockholm to Oslo",
+            start_location="Stockholm",
+            destination="Oslo",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=2,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/fuel-status",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Trip does not have a vehicle"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_fuel_status_requires_starting_fuel(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=user.id,
+            name="My Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=6,
+            tank_capacity=55,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        trip = Trip(
+            user_id=user.id,
+            vehicle_id=vehicle.id,
+            name="Stockholm to Oslo",
+            start_location="Stockholm",
+            destination="Oslo",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=2,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/fuel-status",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Trip does not have starting fuel data"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_fuel_status_cannot_access_another_users_trip(client):
+    db = TestingSessionLocal()
+
+    try:
+        owner = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=owner.id,
+            name="Owner Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=6,
+            tank_capacity=55,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        trip = Trip(
+            user_id=owner.id,
+            vehicle_id=vehicle.id,
+            name="Owner Trip",
+            start_location="Stockholm",
+            destination="Oslo",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=2,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        other_user = create_test_user(
+            db,
+            email="other@example.com",
+        )
+
+        token = create_access_token(other_user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/fuel-status",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Trip not found"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_fuel_status_calculates_expected_values(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=user.id,
+            name="My Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=10,
+            tank_capacity=50,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        trip = Trip(
+            user_id=user.id,
+            vehicle_id=vehicle.id,
+            name="Short Trip",
+            start_location="Stockholm",
+            destination="Nearby",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=1,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        trip_fuel = TripFuel(
+            trip_id=trip.id,
+            starting_fuel=50,
+            current_fuel=50,
+            fuel_used=0,
+            fuel_cost=0,
+        )
+
+        locations = [
+            TripLocation(
+                trip_id=trip.id,
+                latitude=59.3293,
+                longitude=18.0686,
+                recorded_at=datetime(2026, 9, 5, 12, 0, 0),
+            ),
+            TripLocation(
+                trip_id=trip.id,
+                latitude=59.3393,
+                longitude=18.0686,
+                recorded_at=datetime(2026, 9, 5, 13, 0, 0),
+            ),
+        ]
+
+        db.add(trip_fuel)
+        db.add_all(locations)
+        db.commit()
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/fuel-status",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        expected_distance = 1.11195
+        expected_fuel_remaining = 50 - (expected_distance / 100 * 10)
+        expected_range = expected_fuel_remaining / 10 * 100
+
+        assert data["distance_traveled_km"] == pytest.approx(
+            expected_distance,
+            rel=0.01,
+        )
+        assert data["fuel_remaining"] == pytest.approx(
+            expected_fuel_remaining,
+            rel=0.01,
+        )
+        assert data["remaining_range_km"] == pytest.approx(
+            expected_range,
+            rel=0.01,
+        )
 
     finally:
         db.close()
