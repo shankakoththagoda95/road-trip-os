@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from app.models.base import Base
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.models.trip import Trip
+
 
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -403,6 +405,74 @@ def test_update_trip_cannot_use_another_users_vehicle(client):
 
         assert response.status_code == 404
         assert response.json()["detail"] == "Vehicle not found"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_fuel_estimate(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=user.id,
+            name="My Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=6,
+            tank_capacity=55,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        trip = Trip(
+            user_id=user.id,
+            vehicle_id=vehicle.id,
+            name="Stockholm to Oslo",
+            start_location="Stockholm",
+            destination="Oslo",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=2,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        mock_route = {
+            "route": {
+                "distance_meters": 600_000,
+            },
+        }
+
+        with patch(
+            "app.api.v1.trips.calculate_trip_route_details",
+            return_value=mock_route,
+        ):
+            response = client.get(
+                f"/trips/{trip.id}/fuel-estimate?fuel_price_per_liter=1.80",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["trip_id"] == trip.id
+        assert data["distance_km"] == 600
+        assert data["fuel_required"] == 36
+        assert data["fuel_price_per_liter"] == 1.80
+        assert data["estimated_fuel_cost"] == 64.8
 
     finally:
         db.close()

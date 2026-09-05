@@ -6,12 +6,14 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.models.trip import Trip
 from app.models.user import User
+from app.models.vehicle import Vehicle
 from app.schemas.trip import TripCreate, TripResponse, TripUpdate
 from app.schemas.route import RoutePreference, TripRouteResponse
 from app.services.route_constraints import check_distance_limit
 from app.services.trip_route import calculate_trip_route_details
 from app.models.trip_destination import TripDestination
-from app.models.vehicle import Vehicle
+from app.schemas.fuel import TripFuelEstimateResponse
+from app.services.fuel import calculate_trip_fuel_cost
 
 
 router = APIRouter(
@@ -171,6 +173,89 @@ def delete_trip(
     db.commit()
 
     return {"message": "Trip deleted successfully"}
+
+
+@router.get(
+    "/{trip_id}/fuel-estimate",
+    response_model=TripFuelEstimateResponse,
+)
+def get_trip_fuel_estimate(
+    trip_id: int,
+    fuel_price_per_liter: float,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    if trip.vehicle_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Trip does not have a vehicle",
+        )
+
+    vehicle = db.scalar(
+        select(Vehicle).where(
+            Vehicle.id == trip.vehicle_id,
+            Vehicle.user_id == current_user.id,
+        )
+    )
+
+    if vehicle is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Vehicle not found",
+        )
+
+    destinations = db.scalars(
+        select(TripDestination)
+        .where(TripDestination.trip_id == trip_id)
+        .order_by(TripDestination.stop_order)
+    ).all()
+
+    try:
+        route_details = calculate_trip_route_details(
+            trip,
+            destinations,
+            RoutePreference.FASTEST,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    if vehicle.fuel_consumption is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Vehicle does not have fuel consumption data",
+        )
+    
+    distance_km = route_details["route"]["distance_meters"] / 1000
+    
+    fuel_required, fuel_cost = calculate_trip_fuel_cost(
+        distance_km=distance_km,
+        consumption_l_per_100km=vehicle.fuel_consumption,
+        fuel_price_per_liter=fuel_price_per_liter,
+    )
+
+    return {
+        "trip_id": trip.id,
+        "distance_km": distance_km,
+        "fuel_required": fuel_required,
+        "fuel_price_per_liter": fuel_price_per_liter,
+        "estimated_fuel_cost": fuel_cost,
+    }
 
 
 @router.get(
