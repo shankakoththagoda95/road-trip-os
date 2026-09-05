@@ -32,6 +32,16 @@ class Vehicle(Base):
         nullable=True,
     )
 
+    battery_capacity: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    
+    energy_consumption: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,

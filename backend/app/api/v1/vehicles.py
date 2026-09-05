@@ -28,6 +28,8 @@ def create_vehicle(
         fuel_type=vehicle_data.fuel_type,
         fuel_consumption=vehicle_data.fuel_consumption,
         tank_capacity=vehicle_data.tank_capacity,
+        battery_capacity=vehicle_data.battery_capacity,
+        energy_consumption=vehicle_data.energy_consumption,
     )
 
     db.add(new_vehicle)
@@ -98,6 +100,8 @@ def update_vehicle(
     vehicle.fuel_type = vehicle_data.fuel_type
     vehicle.fuel_consumption = vehicle_data.fuel_consumption
     vehicle.tank_capacity = vehicle_data.tank_capacity
+    vehicle.battery_capacity = vehicle_data.battery_capacity
+    vehicle.energy_consumption = vehicle_data.energy_consumption
 
     db.commit()
     db.refresh(vehicle)
