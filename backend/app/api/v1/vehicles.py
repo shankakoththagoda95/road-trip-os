@@ -7,6 +7,8 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
+from app.schemas.fuel_range import VehicleFuelRangeResponse
+from app.services.fuel import calculate_fuel_range
 
 
 router = APIRouter(
@@ -107,6 +109,53 @@ def update_vehicle(
     db.refresh(vehicle)
 
     return vehicle
+
+
+@router.get(
+    "/{vehicle_id}/fuel-range",
+    response_model=VehicleFuelRangeResponse,
+)
+def get_vehicle_fuel_range(
+    vehicle_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    vehicle = db.scalar(
+        select(Vehicle).where(
+            Vehicle.id == vehicle_id,
+            Vehicle.user_id == current_user.id,
+        )
+    )
+
+    if vehicle is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Vehicle not found",
+        )
+
+    if vehicle.tank_capacity is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Vehicle does not have tank capacity data",
+        )
+
+    if vehicle.fuel_consumption is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Vehicle does not have fuel consumption data",
+        )
+
+    estimated_range_km = calculate_fuel_range(
+        fuel_available=vehicle.tank_capacity,
+        consumption_l_per_100km=vehicle.fuel_consumption,
+    )
+
+    return {
+        "vehicle_id": vehicle.id,
+        "fuel_available": vehicle.tank_capacity,
+        "fuel_consumption": vehicle.fuel_consumption,
+        "estimated_range_km": estimated_range_km,
+    }
 
 
 @router.delete("/{vehicle_id}")

@@ -40,3 +40,16 @@ def calculate_trip_fuel_cost(
     )
 
     return fuel_required, fuel_cost
+
+
+def calculate_fuel_range(
+    fuel_available: float,
+    consumption_l_per_100km: float,
+) -> float:
+    if fuel_available < 0:
+        raise ValueError("Fuel available cannot be negative")
+
+    if consumption_l_per_100km <= 0:
+        raise ValueError("Fuel consumption must be greater than zero")
+
+    return (fuel_available / consumption_l_per_100km) * 100

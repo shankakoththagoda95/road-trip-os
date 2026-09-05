@@ -248,3 +248,164 @@ def test_user_cannot_access_another_users_vehicle(client):
 
     finally:
         db.close()
+
+
+def test_get_vehicle_fuel_range(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=user.id,
+            name="My Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=6,
+            tank_capacity=60,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/vehicles/{vehicle.id}/fuel-range",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["vehicle_id"] == vehicle.id
+        assert data["fuel_available"] == 60
+        assert data["fuel_consumption"] == 6
+        assert data["estimated_range_km"] == 1000
+
+    finally:
+        db.close()
+
+
+def test_get_vehicle_fuel_range_rejects_vehicle_without_tank_capacity(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=user.id,
+            name="My Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=6,
+            tank_capacity=None,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/vehicles/{vehicle.id}/fuel-range",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Vehicle does not have tank capacity data"
+        )
+
+    finally:
+        db.close()
+
+
+def test_get_vehicle_fuel_range_rejects_vehicle_without_fuel_consumption(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        vehicle = Vehicle(
+            user_id=user.id,
+            name="My Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=None,
+            tank_capacity=60,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/vehicles/{vehicle.id}/fuel-range",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Vehicle does not have fuel consumption data"
+        )
+
+    finally:
+        db.close()
+
+
+def test_get_vehicle_fuel_range_cannot_access_another_users_vehicle(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+        
+        other_user = User(
+            email="other@example.com",
+            password_hash=hash_password("password123"),
+            first_name="Other",
+            last_name="User",
+        )
+        
+        db.add(other_user)
+        db.commit()
+        db.refresh(other_user)
+
+        vehicle = Vehicle(
+            user_id=other_user.id,
+            name="Other Car",
+            vehicle_type="car",
+            fuel_type="petrol",
+            fuel_consumption=6,
+            tank_capacity=60,
+        )
+
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/vehicles/{vehicle.id}/fuel-range",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Vehicle not found"
+
+    finally:
+        db.close()

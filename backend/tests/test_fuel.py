@@ -2,6 +2,7 @@ import pytest
 
 from app.services.fuel import (
     calculate_fuel_cost,
+    calculate_fuel_range,
     calculate_fuel_required,
 )
 
@@ -75,3 +76,60 @@ def test_negative_fuel_required_is_rejected(fuel_required):
 def test_negative_fuel_price_is_rejected(fuel_price):
     with pytest.raises(ValueError, match="Fuel price cannot be negative"):
         calculate_fuel_cost(36, fuel_price)
+
+
+def test_calculate_fuel_range():
+    result = calculate_fuel_range(
+        fuel_available=60,
+        consumption_l_per_100km=6,
+    )
+
+    assert result == 1000
+
+
+def test_calculate_fuel_range_with_different_values():
+    result = calculate_fuel_range(
+        fuel_available=40,
+        consumption_l_per_100km=8,
+    )
+
+    assert result == 500
+
+
+def test_calculate_fuel_range_with_zero_fuel():
+    result = calculate_fuel_range(
+        fuel_available=0,
+        consumption_l_per_100km=6,
+    )
+
+    assert result == 0
+
+
+def test_calculate_fuel_range_rejects_negative_fuel():
+    with pytest.raises(ValueError, match="Fuel available cannot be negative"):
+        calculate_fuel_range(
+            fuel_available=-1,
+            consumption_l_per_100km=6,
+        )
+
+
+def test_calculate_fuel_range_rejects_zero_consumption():
+    with pytest.raises(
+        ValueError,
+        match="Fuel consumption must be greater than zero",
+    ):
+        calculate_fuel_range(
+            fuel_available=60,
+            consumption_l_per_100km=0,
+        )
+
+
+def test_calculate_fuel_range_rejects_negative_consumption():
+    with pytest.raises(
+        ValueError,
+        match="Fuel consumption must be greater than zero",
+    ):
+        calculate_fuel_range(
+            fuel_available=60,
+            consumption_l_per_100km=-1,
+        )
