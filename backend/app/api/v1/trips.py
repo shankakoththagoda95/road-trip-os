@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,6 +16,8 @@ from app.services.trip_route import calculate_trip_route_details
 from app.models.trip_destination import TripDestination
 from app.schemas.fuel import TripFuelEstimateResponse
 from app.services.fuel import calculate_trip_fuel_cost
+from app.models.trip_location import TripLocation
+from app.schemas.trip_location import TripLocationCreate, TripLocationResponse
 
 
 router = APIRouter(
@@ -97,6 +101,43 @@ def get_trip(
         )
 
     return trip
+
+
+@router.post(
+    "/{trip_id}/locations",
+    response_model=TripLocationResponse,
+)
+def record_trip_location(
+    trip_id: int,
+    location: TripLocationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    trip_location = TripLocation(
+        trip_id=trip.id,
+        latitude=location.latitude,
+        longitude=location.longitude,
+        recorded_at=datetime.utcnow(),
+    )
+
+    db.add(trip_location)
+    db.commit()
+    db.refresh(trip_location)
+
+    return trip_location
 
 
 @router.put("/{trip_id}", response_model=TripResponse)
