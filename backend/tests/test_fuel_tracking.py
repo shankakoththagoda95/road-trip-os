@@ -1,7 +1,11 @@
 import pytest
 
-from app.services.fuel_tracking import estimate_fuel_remaining
 from app.services.geography import calculate_distance_km
+from app.services.fuel_tracking import (
+    calculate_fuel_for_movement,
+    estimate_fuel_remaining,
+    update_fuel_for_movement,
+)
 
 
 def test_estimate_fuel_remaining():
@@ -148,4 +152,62 @@ def test_estimate_fuel_remaining_rejects_invalid_threshold():
             starting_fuel=60,
             consumption_l_per_100km=6,
             threshold_meters=1001,
+        )
+
+
+def test_calculate_fuel_for_movement():
+    distance_km, fuel_used = calculate_fuel_for_movement(
+        start=(59.3293, 18.0686),
+        end=(59.3326, 18.0649),
+        consumption_l_per_100km=6,
+    )
+
+    assert distance_km > 0
+    assert fuel_used > 0
+
+
+def test_update_fuel_for_movement():
+    current_fuel, total_fuel_used = update_fuel_for_movement(
+        current_fuel=60,
+        total_fuel_used=0,
+        fuel_used_for_movement=3,
+    )
+
+    assert current_fuel == 57
+    assert total_fuel_used == 3
+
+
+def test_update_fuel_for_movement_does_not_go_below_zero():
+    current_fuel, total_fuel_used = update_fuel_for_movement(
+        current_fuel=5,
+        total_fuel_used=10,
+        fuel_used_for_movement=8,
+    )
+
+    assert current_fuel == 0
+    assert total_fuel_used == 18
+
+
+def test_update_fuel_for_movement_rejects_negative_values():
+    import pytest
+
+    with pytest.raises(ValueError):
+        update_fuel_for_movement(
+            current_fuel=-1,
+            total_fuel_used=0,
+            fuel_used_for_movement=1,
+        )
+
+    with pytest.raises(ValueError):
+        update_fuel_for_movement(
+            current_fuel=10,
+            total_fuel_used=-1,
+            fuel_used_for_movement=1,
+        )
+
+    with pytest.raises(ValueError):
+        update_fuel_for_movement(
+            current_fuel=10,
+            total_fuel_used=0,
+            fuel_used_for_movement=-1,
         )

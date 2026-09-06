@@ -139,6 +139,75 @@ def record_trip_location(
     )
 
     db.add(trip_location)
+    db.flush()
+
+    trip_fuel = db.scalar(
+        select(TripFuel).where(
+            TripFuel.trip_id == trip.id,
+        )
+    )
+
+    if trip_fuel is None:
+        db.commit()
+        db.refresh(trip_location)
+        return trip_location
+
+    if trip.vehicle_id is None:
+        db.commit()
+        db.refresh(trip_location)
+        return trip_location
+
+    vehicle = db.scalar(
+        select(Vehicle).where(
+            Vehicle.id == trip.vehicle_id,
+            Vehicle.user_id == current_user.id,
+        )
+    )
+
+    if vehicle is None or vehicle.fuel_consumption is None:
+        db.commit()
+        db.refresh(trip_location)
+        return trip_location
+
+    settings = db.scalar(
+        select(UserSettings).where(
+            UserSettings.user_id == current_user.id,
+        )
+    )
+
+    threshold_meters = (
+        settings.gps_movement_threshold_meters
+        if settings is not None
+        else 20.0
+    )
+
+    locations = db.scalars(
+        select(TripLocation)
+        .where(TripLocation.trip_id == trip.id)
+        .order_by(TripLocation.recorded_at)
+    ).all()
+
+    coordinates = [
+        (item.latitude, item.longitude)
+        for item in locations
+    ]
+
+    (
+        _distance_traveled_km,
+        fuel_remaining,
+        _remaining_range_km,
+    ) = estimate_fuel_remaining(
+        coordinates=coordinates,
+        starting_fuel=trip_fuel.starting_fuel,
+        consumption_l_per_100km=vehicle.fuel_consumption,
+        threshold_meters=threshold_meters,
+    )
+
+    trip_fuel.current_fuel = fuel_remaining
+    trip_fuel.fuel_used = (
+        trip_fuel.starting_fuel - fuel_remaining
+    )
+
     db.commit()
     db.refresh(trip_location)
 

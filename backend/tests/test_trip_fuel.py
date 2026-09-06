@@ -332,3 +332,128 @@ def test_fuel_status_uses_user_gps_threshold(client):
     assert data["trip_id"] == trip_id
     assert data["distance_traveled_km"] == 0
     assert data["fuel_remaining"] == 60
+
+
+def test_record_location_updates_fuel(client):
+    db = TestingSessionLocal()
+
+    user = create_test_user(
+        db,
+        "automatic-fuel@example.com",
+    )
+
+    trip = create_test_trip(db, user)
+
+    trip_fuel = TripFuel(
+        trip_id=trip.id,
+        starting_fuel=60,
+        current_fuel=60,
+        fuel_used=0,
+        fuel_cost=0,
+    )
+
+    db.add(trip_fuel)
+
+    db.commit()
+
+    trip_id = trip.id
+    token = create_access_token(user.id)
+
+    db.close()
+
+    first_response = client.post(
+        f"/trips/{trip_id}/locations",
+        json={
+            "latitude": 59.3293,
+            "longitude": 18.0686,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert first_response.status_code == 200
+
+    second_response = client.post(
+        f"/trips/{trip_id}/locations",
+        json={
+            "latitude": 59.3326,
+            "longitude": 18.0649,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert second_response.status_code == 200
+
+    db = TestingSessionLocal()
+
+    updated_fuel = db.scalar(
+        select(TripFuel).where(
+            TripFuel.trip_id == trip_id,
+        )
+    )
+
+    assert updated_fuel.current_fuel < 60
+    assert updated_fuel.fuel_used > 0
+
+    db.close()
+
+
+def test_record_location_below_threshold_does_not_update_fuel(client):
+    db = TestingSessionLocal()
+
+    user = create_test_user(
+        db,
+        "below-threshold@example.com",
+    )
+
+    trip = create_test_trip(db, user)
+
+    trip_fuel = TripFuel(
+        trip_id=trip.id,
+        starting_fuel=60,
+        current_fuel=60,
+        fuel_used=0,
+        fuel_cost=0,
+    )
+
+    db.add(trip_fuel)
+    db.commit()
+
+    trip_id = trip.id
+    token = create_access_token(user.id)
+
+    db.close()
+
+    first_response = client.post(
+        f"/trips/{trip_id}/locations",
+        json={
+            "latitude": 59.3293,
+            "longitude": 18.0686,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert first_response.status_code == 200
+
+    second_response = client.post(
+        f"/trips/{trip_id}/locations",
+        json={
+            "latitude": 59.32935,
+            "longitude": 18.06865,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert second_response.status_code == 200
+
+    db = TestingSessionLocal()
+
+    updated_fuel = db.scalar(
+        select(TripFuel).where(
+            TripFuel.trip_id == trip_id,
+        )
+    )
+
+    assert updated_fuel.current_fuel == 60
+    assert updated_fuel.fuel_used == 0
+
+    db.close()
