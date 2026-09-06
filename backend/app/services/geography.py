@@ -75,7 +75,13 @@ def remove_consecutive_duplicate_coordinates(
 
 def filter_gps_coordinates_by_distance(
     coordinates: list[tuple[float, float]],
+    threshold_meters: float = GPS_MIN_MOVEMENT_METERS,
 ) -> list[tuple[float, float]]:
+    if threshold_meters < 1 or threshold_meters > 1000:
+        raise ValueError(
+            "GPS movement threshold must be between 1 and 1000 meters"
+        )
+    
     if not coordinates:
         return []
 

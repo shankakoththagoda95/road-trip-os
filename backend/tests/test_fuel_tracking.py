@@ -105,3 +105,47 @@ def test_estimate_fuel_remaining_ignores_gps_drift():
     assert remaining_range == pytest.approx(
         ((60 - expected_fuel_used) / 6) * 100
     )
+
+
+def test_estimate_fuel_remaining_uses_20_meter_default_threshold():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.32931, 18.06861),
+    ]
+
+    distance_traveled, _, _ = estimate_fuel_remaining(
+        coordinates=coordinates,
+        starting_fuel=60,
+        consumption_l_per_100km=6,
+    )
+
+    assert distance_traveled == 0.0
+
+
+def test_estimate_fuel_remaining_accepts_custom_threshold():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.3295, 18.0688),
+    ]
+
+    distance_traveled, _, _ = estimate_fuel_remaining(
+        coordinates=coordinates,
+        starting_fuel=60,
+        consumption_l_per_100km=6,
+        threshold_meters=1,
+    )
+
+    assert distance_traveled > 0
+
+
+def test_estimate_fuel_remaining_rejects_invalid_threshold():
+    with pytest.raises(
+        ValueError,
+        match="between 1 and 1000 meters",
+    ):
+        estimate_fuel_remaining(
+            coordinates=[],
+            starting_fuel=60,
+            consumption_l_per_100km=6,
+            threshold_meters=1001,
+        )

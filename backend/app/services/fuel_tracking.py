@@ -3,6 +3,7 @@ from app.services.fuel import (
     calculate_fuel_remaining,
 )
 from app.services.geography import (
+    GPS_MIN_MOVEMENT_METERS,
     calculate_total_distance_km,
     filter_gps_coordinates_by_distance,
     remove_consecutive_duplicate_coordinates,
@@ -13,13 +14,15 @@ def estimate_fuel_remaining(
     coordinates: list[tuple[float, float]],
     starting_fuel: float,
     consumption_l_per_100km: float,
+    threshold_meters: float = GPS_MIN_MOVEMENT_METERS,
 ) -> tuple[float, float, float]:
     cleaned_coordinates = remove_consecutive_duplicate_coordinates(
         coordinates
     )
     
     filtered_coordinates = filter_gps_coordinates_by_distance(
-        cleaned_coordinates
+        cleaned_coordinates,
+        threshold_meters=threshold_meters,
     )
     
     distance_traveled_km = calculate_total_distance_km(

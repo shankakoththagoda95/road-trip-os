@@ -229,3 +229,64 @@ def test_filter_gps_coordinates_by_distance_empty():
     result = filter_gps_coordinates_by_distance([])
 
     assert result == []
+
+
+def test_filter_gps_coordinates_uses_20_meter_default_threshold():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.32931, 18.06861),
+    ]
+
+    result = filter_gps_coordinates_by_distance(coordinates)
+
+    assert result == [
+        (59.3293, 18.0686),
+    ]
+
+
+def test_filter_gps_coordinates_accepts_custom_threshold():
+    coordinates = [
+        (59.3293, 18.0686),
+        (59.3295, 18.0688),
+    ]
+
+    result = filter_gps_coordinates_by_distance(
+        coordinates,
+        threshold_meters=1,
+    )
+
+    assert result == coordinates
+
+
+def test_filter_gps_coordinates_rejects_threshold_below_1_meter():
+    with pytest.raises(ValueError, match="between 1 and 1000 meters"):
+        filter_gps_coordinates_by_distance(
+            [],
+            threshold_meters=0,
+        )
+
+
+def test_filter_gps_coordinates_rejects_threshold_above_1_km():
+    with pytest.raises(ValueError, match="between 1 and 1000 meters"):
+        filter_gps_coordinates_by_distance(
+            [],
+            threshold_meters=1001,
+        )
+
+
+def test_filter_gps_coordinates_accepts_1_meter_boundary():
+    result = filter_gps_coordinates_by_distance(
+        [],
+        threshold_meters=1,
+    )
+
+    assert result == []
+
+
+def test_filter_gps_coordinates_accepts_1_km_boundary():
+    result = filter_gps_coordinates_by_distance(
+        [],
+        threshold_meters=1000,
+    )
+
+    assert result == []
