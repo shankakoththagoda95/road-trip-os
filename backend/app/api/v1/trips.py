@@ -22,6 +22,7 @@ from app.models.trip_location import TripLocation
 from app.schemas.fuel_range import TripFuelStatusResponse
 from app.services.fuel_tracking import estimate_fuel_remaining
 from app.models.trip_fuel import TripFuel
+from app.models.user_settings import UserSettings
 
 
 router = APIRouter(
@@ -243,6 +244,12 @@ def get_trip_fuel_estimate(
             detail="Trip not found",
         )
 
+    settings = db.scalar(
+        select(UserSettings).where(
+            UserSettings.user_id == current_user.id,
+        )
+    )
+
     if trip.vehicle_id is None:
         raise HTTPException(
             status_code=400,
@@ -325,6 +332,12 @@ def get_trip_fuel_status(
             detail="Trip not found",
         )
 
+    settings = db.scalar(
+        select(UserSettings).where(
+            UserSettings.user_id == current_user.id,
+        )
+    )
+
     if trip.vehicle_id is None:
         raise HTTPException(
             status_code=400,
@@ -378,10 +391,15 @@ def get_trip_fuel_status(
         fuel_remaining,
         remaining_range_km,
     ) = estimate_fuel_remaining(
-        coordinates=coordinates,
-        starting_fuel=trip_fuel.starting_fuel,
-        consumption_l_per_100km=vehicle.fuel_consumption,
-    )
+            coordinates=coordinates,
+            starting_fuel=trip_fuel.starting_fuel,
+            consumption_l_per_100km=vehicle.fuel_consumption,
+            threshold_meters=(
+                settings.gps_movement_threshold_meters
+                if settings is not None
+                else 20.0
+            ),
+        )
 
     return {
         "trip_id": trip.id,

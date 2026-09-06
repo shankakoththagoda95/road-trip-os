@@ -14,6 +14,9 @@ from app.models.base import Base
 from app.models.trip import Trip
 from app.models.trip_fuel import TripFuel
 from app.models.user import User
+from app.models.trip_location import TripLocation
+from app.models.user_settings import UserSettings
+from app.models.vehicle import Vehicle
 
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -75,8 +78,22 @@ def create_test_user(db, email="test@example.com"):
 
 
 def create_test_trip(db, user):
+    vehicle = Vehicle(
+        user_id=user.id,
+        name="Test Car",
+        vehicle_type="car",
+        fuel_type="petrol",
+        fuel_consumption=6.0,
+        tank_capacity=60.0,
+    )
+
+    db.add(vehicle)
+    db.commit()
+    db.refresh(vehicle)
+
     trip = Trip(
         user_id=user.id,
+        vehicle_id=vehicle.id,
         name="Stockholm to Oslo",
         start_location="Stockholm",
         destination="Oslo",
@@ -85,9 +102,11 @@ def create_test_trip(db, user):
         travelers=2,
         duration_days=2,
     )
+
     db.add(trip)
     db.commit()
     db.refresh(trip)
+
     return trip
 
 
@@ -245,3 +264,71 @@ def test_negative_fuel_values_are_rejected_by_api(client, field):
     )
 
     assert response.status_code == 422
+
+
+def test_fuel_status_uses_user_gps_threshold(client):
+    db = TestingSessionLocal()
+
+    user = create_test_user(
+        db,
+        "fuel-settings@example.com",
+    )
+
+    trip = create_test_trip(db, user)
+
+    trip_fuel = TripFuel(
+        trip_id=trip.id,
+        starting_fuel=60,
+        current_fuel=60,
+        fuel_used=0,
+        fuel_cost=0,
+    )
+
+    db.add(trip_fuel)
+
+    db.add_all(
+        [
+            TripLocation(
+                trip_id=trip.id,
+                latitude=59.3293,
+                longitude=18.0686,
+                recorded_at=datetime.now(),
+            ),
+            TripLocation(
+                trip_id=trip.id,
+                latitude=59.3295,
+                longitude=18.0688,
+                recorded_at=datetime.now() + timedelta(seconds=1),
+            ),
+        ]
+    )
+
+    settings = UserSettings(
+        user_id=user.id,
+        gps_movement_threshold_meters=1000,
+    )
+
+    db.add(settings)
+    db.commit()
+
+    print(
+        "TEST SETTINGS:",
+        settings.gps_movement_threshold_meters,
+    )
+
+    trip_id = trip.id
+    token = create_access_token(user.id)
+    db.close()
+
+    response = client.get(
+        f"/trips/{trip_id}/fuel-status",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["trip_id"] == trip_id
+    assert data["distance_traveled_km"] == 0
+    assert data["fuel_remaining"] == 60

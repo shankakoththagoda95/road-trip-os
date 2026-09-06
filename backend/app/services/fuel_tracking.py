@@ -24,7 +24,7 @@ def estimate_fuel_remaining(
         cleaned_coordinates,
         threshold_meters=threshold_meters,
     )
-    
+
     distance_traveled_km = calculate_total_distance_km(
         filtered_coordinates
     )

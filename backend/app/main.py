@@ -9,6 +9,7 @@ from app.api.v1.trips import router as trips_router
 from app.api.v1.trip_destinations import router as trip_destinations_router
 from app.api.v1.itineraries import router as itineraries_router
 from app.api.v1.trip_fuel import router as trip_fuel_router
+from app.api.v1.user_settings import router as user_settings_router
 from app.api.v1 import itineraries
 
 
@@ -23,6 +24,7 @@ app.include_router(trips_router)
 app.include_router(trip_destinations_router)
 app.include_router(itineraries_router)
 app.include_router(trip_fuel_router)
+app.include_router(user_settings_router)
 
 @app.get("/")
 def root():

@@ -81,7 +81,7 @@ def filter_gps_coordinates_by_distance(
         raise ValueError(
             "GPS movement threshold must be between 1 and 1000 meters"
         )
-    
+
     if not coordinates:
         return []
 
@@ -99,7 +99,7 @@ def filter_gps_coordinates_by_distance(
 
         distance_meters = distance_km * 1000
 
-        if distance_meters >= GPS_MIN_MOVEMENT_METERS:
+        if distance_meters >= threshold_meters:
             filtered_coordinates.append(coordinate)
 
     return filtered_coordinates
