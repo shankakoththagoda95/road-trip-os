@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from unittest.mock import patch
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
@@ -13,6 +14,7 @@ from app.main import app
 from app.models.base import Base
 from app.models.trip import Trip
 from app.models.trip_fuel import TripFuel
+from app.models.trip_destination import TripDestination
 from app.models.user import User
 from app.models.trip_location import TripLocation
 from app.models.user_settings import UserSettings
@@ -311,11 +313,6 @@ def test_fuel_status_uses_user_gps_threshold(client):
     db.add(settings)
     db.commit()
 
-    print(
-        "TEST SETTINGS:",
-        settings.gps_movement_threshold_meters,
-    )
-
     trip_id = trip.id
     token = create_access_token(user.id)
     db.close()
@@ -332,6 +329,142 @@ def test_fuel_status_uses_user_gps_threshold(client):
     assert data["trip_id"] == trip_id
     assert data["distance_traveled_km"] == 0
     assert data["fuel_remaining"] == 60
+
+
+def test_fuel_status_reports_when_fuel_stop_is_needed(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(
+            db,
+            "fuel-stop@example.com",
+        )
+
+        trip = create_test_trip(db, user)
+
+        trip_fuel = TripFuel(
+            trip_id=trip.id,
+            starting_fuel=10,
+            current_fuel=10,
+            fuel_used=0,
+            fuel_cost=0,
+        )
+
+        db.add(trip_fuel)
+
+        db.add(
+            TripDestination(
+                trip_id=trip.id,
+                location="Oslo",
+                latitude=59.9139,
+                longitude=10.7522,
+                stop_order=1,
+            )
+        )
+
+        db.commit()
+
+        trip_id = trip.id
+        token = create_access_token(user.id)
+
+    finally:
+        db.close()
+
+    mock_route = {
+        "route": {
+            "distance_meters": 600_000,
+        },
+    }
+
+    with patch(
+        "app.api.v1.trips.calculate_trip_route_details",
+        return_value=mock_route,
+    ):
+        response = client.get(
+            f"/trips/{trip_id}/fuel-status",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["trip_id"] == trip_id
+    assert data["remaining_range_km"] == pytest.approx(
+        166.6667,
+        rel=1e-4,
+    )
+    assert data["needs_fuel_stop"] is True
+
+
+def test_fuel_status_reports_when_fuel_stop_is_not_needed(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(
+            db,
+            "no-fuel-stop@example.com",
+        )
+
+        trip = create_test_trip(db, user)
+
+        trip_fuel = TripFuel(
+            trip_id=trip.id,
+            starting_fuel=60,
+            current_fuel=60,
+            fuel_used=0,
+            fuel_cost=0,
+        )
+
+        db.add(trip_fuel)
+
+        db.add(
+            TripDestination(
+                trip_id=trip.id,
+                location="Oslo",
+                latitude=59.9139,
+                longitude=10.7522,
+                stop_order=1,
+            )
+        )
+
+        db.commit()
+
+        trip_id = trip.id
+        token = create_access_token(user.id)
+
+    finally:
+        db.close()
+
+    mock_route = {
+        "route": {
+            "distance_meters": 600_000,
+        },
+    }
+
+    with patch(
+        "app.api.v1.trips.calculate_trip_route_details",
+        return_value=mock_route,
+    ):
+        response = client.get(
+            f"/trips/{trip_id}/fuel-status",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["trip_id"] == trip_id
+    assert data["remaining_range_km"] == pytest.approx(
+        1000,
+        rel=1e-4,
+    )
+    assert data["needs_fuel_stop"] is False
 
 
 def test_record_location_updates_fuel(client):

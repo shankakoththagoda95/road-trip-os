@@ -13,3 +13,4 @@ class TripFuelStatusResponse(BaseModel):
     distance_traveled_km: float
     fuel_remaining: float
     remaining_range_km: float
+    needs_fuel_stop: bool

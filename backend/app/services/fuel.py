@@ -77,3 +77,27 @@ def calculate_fuel_remaining(
     fuel_remaining = starting_fuel - fuel_used
 
     return max(fuel_remaining, 0.0)
+
+
+def needs_fuel_stop(
+    remaining_distance_km: float,
+    fuel_available: float,
+    consumption_l_per_100km: float,
+) -> bool:
+    if remaining_distance_km < 0:
+        raise ValueError("Remaining distance cannot be negative")
+
+    if fuel_available < 0:
+        raise ValueError("Fuel available cannot be negative")
+
+    if consumption_l_per_100km <= 0:
+        raise ValueError(
+            "Fuel consumption must be greater than zero"
+        )
+
+    available_range_km = calculate_fuel_range(
+        fuel_available=fuel_available,
+        consumption_l_per_100km=consumption_l_per_100km,
+    )
+
+    return available_range_km < remaining_distance_km

@@ -6,6 +6,7 @@ from app.services.fuel import (
     calculate_fuel_remaining,
     calculate_fuel_required,
 )
+from app.services.fuel import needs_fuel_stop
 
 
 def test_calculate_fuel_required():
@@ -198,5 +199,65 @@ def test_calculate_fuel_remaining_rejects_zero_consumption():
         calculate_fuel_remaining(
             starting_fuel=60,
             distance_traveled_km=100,
+            consumption_l_per_100km=0,
+        )
+
+
+def test_needs_fuel_stop_when_remaining_range_is_too_short():
+    result = needs_fuel_stop(
+        remaining_distance_km=450,
+        fuel_available=30,
+        consumption_l_per_100km=10,
+    )
+
+    assert result is True
+
+
+def test_does_not_need_fuel_stop_when_remaining_range_is_enough():
+    result = needs_fuel_stop(
+        remaining_distance_km=250,
+        fuel_available=30,
+        consumption_l_per_100km=10,
+    )
+
+    assert result is False
+
+
+def test_does_not_need_fuel_stop_when_range_equals_remaining_distance():
+    result = needs_fuel_stop(
+        remaining_distance_km=300,
+        fuel_available=30,
+        consumption_l_per_100km=10,
+    )
+
+    assert result is False
+
+
+def test_needs_fuel_stop_rejects_negative_remaining_distance():
+    with pytest.raises(ValueError, match="Remaining distance cannot be negative"):
+        needs_fuel_stop(
+            remaining_distance_km=-10,
+            fuel_available=30,
+            consumption_l_per_100km=10,
+        )
+
+
+def test_needs_fuel_stop_rejects_negative_fuel():
+    with pytest.raises(ValueError, match="Fuel available cannot be negative"):
+        needs_fuel_stop(
+            remaining_distance_km=300,
+            fuel_available=-1,
+            consumption_l_per_100km=10,
+        )
+
+
+def test_needs_fuel_stop_rejects_invalid_consumption():
+    with pytest.raises(
+        ValueError,
+        match="Fuel consumption must be greater than zero",
+    ):
+        needs_fuel_stop(
+            remaining_distance_km=300,
+            fuel_available=30,
             consumption_l_per_100km=0,
         )

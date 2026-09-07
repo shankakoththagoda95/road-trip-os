@@ -15,7 +15,7 @@ from app.services.route_constraints import check_distance_limit
 from app.services.trip_route import calculate_trip_route_details
 from app.models.trip_destination import TripDestination
 from app.schemas.fuel import TripFuelEstimateResponse
-from app.services.fuel import calculate_trip_fuel_cost
+from app.services.fuel import calculate_trip_fuel_cost, needs_fuel_stop
 from app.models.trip_location import TripLocation
 from app.schemas.trip_location import TripLocationCreate, TripLocationResponse
 from app.models.trip_location import TripLocation
@@ -469,12 +469,45 @@ def get_trip_fuel_status(
                 else 20.0
             ),
         )
+    destinations = db.scalars(
+        select(TripDestination)
+        .where(TripDestination.trip_id == trip_id)
+        .order_by(TripDestination.stop_order)
+    ).all()
+
+    try:
+        route_details = calculate_trip_route_details(
+            trip,
+            destinations,
+            RoutePreference.FASTEST,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    total_route_distance_km = (
+        route_details["route"]["distance_meters"] / 1000
+    )
+
+    remaining_distance_km = max(
+        total_route_distance_km - distance_traveled_km,
+        0.0,
+    )
+
+    fuel_stop_needed = needs_fuel_stop(
+        remaining_distance_km=remaining_distance_km,
+        fuel_available=fuel_remaining,
+        consumption_l_per_100km=vehicle.fuel_consumption,
+    )
 
     return {
         "trip_id": trip.id,
         "distance_traveled_km": distance_traveled_km,
         "fuel_remaining": fuel_remaining,
         "remaining_range_km": remaining_range_km,
+        "needs_fuel_stop": fuel_stop_needed,
     }
 
 
