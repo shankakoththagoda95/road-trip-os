@@ -12,7 +12,7 @@ from app.api.v1.trip_fuel import router as trip_fuel_router
 from app.api.v1.user_settings import router as user_settings_router
 from app.api.v1.fuel_stations import router as fuel_stations_router
 from app.api.v1 import itineraries
-
+from app.api.v1.ev_charging import router as ev_charging_router
 
 
 app = FastAPI()
@@ -27,6 +27,8 @@ app.include_router(itineraries_router)
 app.include_router(trip_fuel_router)
 app.include_router(user_settings_router)
 app.include_router(fuel_stations_router)
+app.include_router(ev_charging_router)
+
 
 @app.get("/")
 def root():
