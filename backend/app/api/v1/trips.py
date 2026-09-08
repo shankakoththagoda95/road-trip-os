@@ -23,6 +23,8 @@ from app.schemas.fuel_range import TripFuelStatusResponse
 from app.services.fuel_tracking import estimate_fuel_remaining
 from app.models.trip_fuel import TripFuel
 from app.models.user_settings import UserSettings
+from app.schemas.route import RoutePreference
+from app.services.trip_route import calculate_trip_route_details
 
 
 router = APIRouter(

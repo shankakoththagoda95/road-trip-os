@@ -7,6 +7,7 @@ from app.models.itinerary_day import ItineraryDay
 from app.models.trip_fuel import TripFuel
 from app.models.trip_location import TripLocation
 from app.models.user_settings import UserSettings
+from app.models.trip_ev import TripEV
 
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "Itinerary",
     "ItineraryDay",
     "TripFuel",
+    "TripEV",
     "TripLocation",
     "UserSettings",
 ]
