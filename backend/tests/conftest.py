@@ -76,3 +76,12 @@ def test_user():
         return user
     finally:
         db.close()
+
+
+@pytest.fixture
+def db():
+    session = TestingSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
