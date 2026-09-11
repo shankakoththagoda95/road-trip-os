@@ -1,4 +1,5 @@
 from app.models.trip import Trip
+from app.services.tolls import TollCalculation, TollProvider, calculate_route_tolls
 from app.models.trip_destination import TripDestination
 from app.schemas.route import RoutePreference
 from app.schemas.trip import TripType
@@ -86,3 +87,25 @@ def calculate_trip_route_details(
         "legs": legs,
         "days": days,
     }
+
+
+def calculate_trip_route_tolls(
+    trip: Trip,
+    destinations: list[TripDestination],
+    preference: RoutePreference,
+    provider: TollProvider,
+    currency: str,
+) -> TollCalculation:
+    route_details = calculate_trip_route_details(
+        trip=trip,
+        destinations=destinations,
+        preference=preference,
+    )
+
+    route_coordinates = route_details["route"]["geometry"]["coordinates"]
+
+    return calculate_route_tolls(
+        route_coordinates=route_coordinates,
+        provider=provider,
+        currency=currency,
+    )

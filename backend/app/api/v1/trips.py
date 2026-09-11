@@ -6,25 +6,30 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
+from app.schemas.fuel_range import TripFuelStatusResponse
+from app.schemas.trip import TripCreate, TripResponse, TripUpdate
+from app.schemas.route import RoutePreference, TripRouteResponse
+from app.schemas.tolls import TollCalculationResponse
+from app.schemas.route import RoutePreference
+from app.schemas.trip_location import TripLocationCreate, TripLocationResponse
+from app.schemas.fuel import TripFuelEstimateResponse
+from app.services.tolls import TollProvider
+from app.services.route_constraints import check_distance_limit
+from app.services.fuel import calculate_trip_fuel_cost, needs_fuel_stop
+from app.services.fuel_tracking import estimate_fuel_remaining
+from app.services.trip_route import (
+    calculate_trip_route_details,
+    calculate_trip_route_tolls,
+)
+from app.models.trip_fuel import TripFuel
+from app.models.user_settings import UserSettings
+from app.models.trip_location import TripLocation
 from app.models.trip import Trip
 from app.models.user import User
 from app.models.vehicle import Vehicle
-from app.schemas.trip import TripCreate, TripResponse, TripUpdate
-from app.schemas.route import RoutePreference, TripRouteResponse
-from app.services.route_constraints import check_distance_limit
-from app.services.trip_route import calculate_trip_route_details
 from app.models.trip_destination import TripDestination
-from app.schemas.fuel import TripFuelEstimateResponse
-from app.services.fuel import calculate_trip_fuel_cost, needs_fuel_stop
 from app.models.trip_location import TripLocation
-from app.schemas.trip_location import TripLocationCreate, TripLocationResponse
 from app.models.trip_location import TripLocation
-from app.schemas.fuel_range import TripFuelStatusResponse
-from app.services.fuel_tracking import estimate_fuel_remaining
-from app.models.trip_fuel import TripFuel
-from app.models.user_settings import UserSettings
-from app.schemas.route import RoutePreference
-from app.services.trip_route import calculate_trip_route_details
 
 
 router = APIRouter(
@@ -600,4 +605,55 @@ def calculate_trip_route_endpoint(
             }
             for day in days
         ],
+    }
+
+
+@router.get(
+    "/{trip_id}/tolls",
+    response_model=TollCalculationResponse,
+)
+def calculate_trip_tolls_endpoint(
+    trip_id: int,
+    currency: str = "EUR",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    destinations = db.scalars(
+        select(TripDestination)
+        .where(TripDestination.trip_id == trip_id)
+        .order_by(TripDestination.stop_order)
+    ).all()
+
+    try:
+        result = calculate_trip_route_tolls(
+            trip=trip,
+            destinations=destinations,
+            preference=RoutePreference.FASTEST,
+            provider=TollProvider(),
+            currency=currency,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return {
+        "trip_id": trip.id,
+        "fees": result.fees,
+        "total_amount": result.total_amount,
+        "currency": result.currency,
     }

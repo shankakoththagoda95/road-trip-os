@@ -14,6 +14,8 @@ from app.models.base import Base
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.models.trip import Trip
+from app.models.trip_destination import TripDestination
+from app.services.tolls import TollProvider
 
 
 
@@ -473,6 +475,153 @@ def test_get_trip_fuel_estimate(client):
         assert data["fuel_required"] == 36
         assert data["fuel_price_per_liter"] == 1.80
         assert data["estimated_fuel_cost"] == 64.8
+
+    finally:
+        db.close()
+
+
+def test_get_trip_tolls(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        trip = Trip(
+            user_id=user.id,
+            name="Stockholm to Gothenburg",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        mock_route = {
+            "route": {
+                "geometry": {
+                    "coordinates": [
+                        [18.0686, 59.3293],
+                        [11.9746, 57.7089],
+                    ],
+                },
+            },
+        }
+
+        with patch(
+            "app.services.trip_route.calculate_trip_route_details",
+            return_value=mock_route,
+        ):
+            response = client.get(
+                f"/trips/{trip.id}/tolls",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["trip_id"] == trip.id
+        assert data["fees"] == []
+        assert data["total_amount"] == 0.0
+        assert data["currency"] == "EUR"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_tolls_cannot_access_another_users_trip(client):
+    db = TestingSessionLocal()
+
+    try:
+        owner = create_test_user(db)
+
+        trip = Trip(
+            user_id=owner.id,
+            name="Private Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        other_user = User(
+            email="other@example.com",
+            password_hash=hash_password("password123"),
+            first_name="Other",
+            last_name="User",
+        )
+
+        db.add(other_user)
+        db.commit()
+        db.refresh(other_user)
+
+        token = create_access_token(other_user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/tolls",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Trip not found"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_tolls_returns_400_when_route_calculation_fails(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        trip = Trip(
+            user_id=user.id,
+            name="Invalid Route Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        with patch(
+            "app.services.trip_route.calculate_trip_route_details",
+            side_effect=ValueError("Route could not be calculated"),
+        ):
+            response = client.get(
+                f"/trips/{trip.id}/tolls",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Route could not be calculated"
 
     finally:
         db.close()

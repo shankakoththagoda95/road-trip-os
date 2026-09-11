@@ -83,7 +83,8 @@ def calculate_multi_stop_route(
     url = f"{OSRM_URL}/{coordinate_string}"
 
     params = {
-        "overview": "false",
+        "overview": "full",
+        "geometries": "geojson",
     }
 
     response = httpx.get(
@@ -106,6 +107,7 @@ def calculate_multi_stop_route(
     return {
         "distance_meters": route["distance"],
         "duration_seconds": route["duration"],
+        "geometry": route["geometry"],
         "legs": [
             {
                 "distance_meters": leg["distance"],
