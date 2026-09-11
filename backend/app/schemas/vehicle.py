@@ -14,11 +14,15 @@ class FuelType(str, Enum):
     PETROL = "petrol"
     DIESEL = "diesel"
     HYBRID = "hybrid"
+    PLUG_IN_HYBRID = "plug_in_hybrid"
     ELECTRIC = "electric"
 
 
 class VehicleCreate(BaseModel):
-    name: str
+    name: str = Field(
+        min_length=1,
+        pattern=r".*\S.*",
+    )
     vehicle_type: VehicleType
     fuel_type: FuelType
     fuel_consumption: float | None = Field(
@@ -40,7 +44,10 @@ class VehicleCreate(BaseModel):
 
 
 class VehicleUpdate(BaseModel):
-    name: str
+    name: str = Field(
+        min_length=1,
+        pattern=r".*\S.*",
+    )
     vehicle_type: VehicleType
     fuel_type: FuelType
     fuel_consumption: float | None = Field(

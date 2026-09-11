@@ -409,3 +409,229 @@ def test_get_vehicle_fuel_range_cannot_access_another_users_vehicle(client):
 
     finally:
         db.close()
+
+
+def test_create_vehicle_supports_plug_in_hybrid(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        token = create_access_token(user.id)
+
+        response = client.post(
+            "/vehicles/",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+            json={
+                "name": "My Plug-in Hybrid",
+                "vehicle_type": "car",
+                "fuel_type": "plug_in_hybrid",
+                "fuel_consumption": 2.5,
+                "tank_capacity": 45,
+                "battery_capacity": 18,
+                "energy_consumption": 16,
+            },
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["name"] == "My Plug-in Hybrid"
+        assert data["fuel_type"] == "plug_in_hybrid"
+        assert data["fuel_consumption"] == 2.5
+        assert data["tank_capacity"] == 45
+        assert data["battery_capacity"] == 18
+        assert data["energy_consumption"] == 16
+
+    finally:
+        db.close()
+
+
+def test_create_electric_vehicle_does_not_require_tank_capacity(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        token = create_access_token(user.id)
+
+        response = client.post(
+            "/vehicles/",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+            json={
+                "name": "My EV",
+                "vehicle_type": "car",
+                "fuel_type": "electric",
+                "battery_capacity": 75,
+                "energy_consumption": 18,
+            },
+        )
+
+        assert response.status_code == 200
+
+    finally:
+        db.close()
+
+
+def test_create_petrol_vehicle_does_not_require_battery_capacity(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        token = create_access_token(user.id)
+
+        response = client.post(
+            "/vehicles/",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+            json={
+                "name": "My Petrol Car",
+                "vehicle_type": "car",
+                "fuel_type": "petrol",
+                "fuel_consumption": 6.5,
+                "tank_capacity": 55,
+            },
+        )
+
+        assert response.status_code == 200
+
+    finally:
+        db.close()
+
+
+def test_create_plug_in_hybrid_can_have_both_fuel_and_ev_data(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        token = create_access_token(user.id)
+
+        response = client.post(
+            "/vehicles/",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+            json={
+                "name": "My PHEV",
+                "vehicle_type": "car",
+                "fuel_type": "plug_in_hybrid",
+                "fuel_consumption": 2.5,
+                "tank_capacity": 45,
+                "battery_capacity": 18,
+                "energy_consumption": 16,
+            },
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["fuel_type"] == "plug_in_hybrid"
+        assert data["fuel_consumption"] == 2.5
+        assert data["tank_capacity"] == 45
+        assert data["battery_capacity"] == 18
+        assert data["energy_consumption"] == 16
+
+        saved_vehicle = db.query(Vehicle).first()
+
+        assert saved_vehicle is not None
+        assert saved_vehicle.fuel_consumption == 2.5
+        assert saved_vehicle.tank_capacity == 45
+        assert saved_vehicle.battery_capacity == 18
+        assert saved_vehicle.energy_consumption == 16
+
+    finally:
+        db.close()
+
+
+def test_create_vehicle_rejects_empty_name(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        token = create_access_token(user.id)
+
+        response = client.post(
+            "/vehicles/",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+            json={
+                "name": "",
+                "vehicle_type": "car",
+                "fuel_type": "petrol",
+                "fuel_consumption": 6.5,
+                "tank_capacity": 55,
+            },
+        )
+
+        assert response.status_code == 422
+
+    finally:
+        db.close()
+
+
+def test_create_vehicle_rejects_whitespace_only_name(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        token = create_access_token(user.id)
+
+        response = client.post(
+            "/vehicles/",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+            json={
+                "name": "   ",
+                "vehicle_type": "car",
+                "fuel_type": "petrol",
+                "fuel_consumption": 6.5,
+                "tank_capacity": 55,
+            },
+        )
+
+        assert response.status_code == 422
+
+    finally:
+        db.close()
+
+
+def test_create_vehicle_accepts_normal_name(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        token = create_access_token(user.id)
+
+        response = client.post(
+            "/vehicles/",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+            json={
+                "name": "My Volvo",
+                "vehicle_type": "car",
+                "fuel_type": "petrol",
+                "fuel_consumption": 6.5,
+                "tank_capacity": 55,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["name"] == "My Volvo"
+
+    finally:
+        db.close()
