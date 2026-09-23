@@ -16,6 +16,10 @@ from app.services.borders import (
     BorderProvider,
     calculate_route_borders,
 )
+from app.services.travel_checklist import (
+    TravelChecklist,
+    generate_travel_checklist,
+)
 
 
 def calculate_trip_route_details(
@@ -133,4 +137,22 @@ def calculate_trip_route_borders(
     return calculate_route_borders(
         route_coordinates=route_coordinates,
         provider=provider,
+    )
+
+
+def calculate_trip_travel_checklist(
+    trip: Trip,
+    destinations: list[TripDestination],
+    preference: RoutePreference,
+    provider: BorderProvider,
+) -> TravelChecklist:
+    border_result = calculate_trip_route_borders(
+        trip=trip,
+        destinations=destinations,
+        preference=preference,
+        provider=provider,
+    )
+
+    return generate_travel_checklist(
+        countries=border_result.countries,
     )

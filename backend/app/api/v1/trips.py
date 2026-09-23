@@ -23,6 +23,7 @@ from app.services.trip_route import (
     calculate_trip_route_borders,
     calculate_trip_route_details,
     calculate_trip_route_tolls,
+    calculate_trip_travel_checklist,
 )
 from app.models.trip_fuel import TripFuel
 from app.models.user_settings import UserSettings
@@ -33,6 +34,7 @@ from app.models.vehicle import Vehicle
 from app.models.trip_destination import TripDestination
 from app.models.trip_location import TripLocation
 from app.models.trip_location import TripLocation
+from app.schemas.travel_checklist import TravelChecklistResponse
 
 
 router = APIRouter(
@@ -707,4 +709,51 @@ def calculate_trip_borders_endpoint(
         "trip_id": trip.id,
         "crossings": result.crossings,
         "countries": result.countries,
+    }
+
+
+@router.get(
+    "/{trip_id}/travel-checklist",
+    response_model=TravelChecklistResponse,
+)
+def calculate_trip_travel_checklist_endpoint(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    destinations = db.scalars(
+        select(TripDestination)
+        .where(TripDestination.trip_id == trip_id)
+        .order_by(TripDestination.stop_order)
+    ).all()
+
+    try:
+        result = calculate_trip_travel_checklist(
+            trip=trip,
+            destinations=destinations,
+            preference=RoutePreference.FASTEST,
+            provider=BorderProvider(),
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return {
+        "trip_id": trip.id,
+        "items": result.items,
     }

@@ -17,7 +17,8 @@ from app.models.trip import Trip
 from app.models.trip_destination import TripDestination
 from app.services.tolls import TollProvider
 from app.services.borders import BorderCalculation, BorderCrossing
-
+from app.services.travel_checklist import TravelChecklist, TravelChecklistItem
+from app.schemas.trip import TripType
 
 
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -785,6 +786,266 @@ def test_get_trip_borders_returns_400_when_route_calculation_fails(client):
 
         assert response.status_code == 400
         assert response.json()["detail"] == "Route could not be calculated"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_travel_checklist(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        trip = Trip(
+            user_id=user.id,
+            name="Sweden Road Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=1,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        mock_result = TravelChecklist(
+            items=[
+                TravelChecklistItem(
+                    name="Passport",
+                    required=True,
+                    description="Valid passport required for international travel.",
+                ),
+                TravelChecklistItem(
+                    name="Travel Insurance",
+                    required=False,
+                    description="Recommended for international travel.",
+                ),
+            ],
+        )
+
+        with patch(
+            "app.api.v1.trips.calculate_trip_travel_checklist",
+            return_value=mock_result,
+        ):
+            response = client.get(
+                f"/trips/{trip.id}/travel-checklist",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["trip_id"] == trip.id
+        assert len(data["items"]) == 2
+
+        assert data["items"][0]["name"] == "Passport"
+        assert data["items"][0]["required"] is True
+        assert (
+            data["items"][0]["description"]
+            == "Valid passport required for international travel."
+        )
+
+        assert data["items"][1]["name"] == "Travel Insurance"
+        assert data["items"][1]["required"] is False
+        assert (
+            data["items"][1]["description"]
+            == "Recommended for international travel."
+        )
+
+    finally:
+        db.close()
+
+
+def test_get_trip_travel_checklist_cannot_access_another_users_trip(client):
+    db = TestingSessionLocal()
+
+    try:
+        owner = create_test_user(db)
+
+        trip = Trip(
+            user_id=owner.id,
+            name="Private Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        other_user = User(
+            email="other@example.com",
+            password_hash=hash_password("password123"),
+            first_name="Other",
+            last_name="User",
+        )
+
+        db.add(other_user)
+        db.commit()
+        db.refresh(other_user)
+
+        token = create_access_token(other_user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/travel-checklist",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Trip not found"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_travel_checklist_returns_400_when_calculation_fails(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        trip = Trip(
+            user_id=user.id,
+            name="Invalid Route Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        with patch(
+            "app.api.v1.trips.calculate_trip_travel_checklist",
+            side_effect=ValueError("Route could not be calculated"),
+        ):
+            response = client.get(
+                f"/trips/{trip.id}/travel-checklist",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Route could not be calculated"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_travel_checklist(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        trip = Trip(
+            user_id=user.id,
+            name="Sweden Road Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=1,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        mock_result = TravelChecklist(
+            items=[],
+        )
+
+        with patch(
+            "app.api.v1.trips.calculate_trip_travel_checklist",
+            return_value=mock_result,
+        ):
+            response = client.get(
+                f"/trips/{trip.id}/travel-checklist",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["trip_id"] == trip.id
+        assert data["items"] == []
+
+    finally:
+        db.close()
+
+
+def test_get_trip_travel_checklist_cannot_access_another_users_trip(client):
+    db = TestingSessionLocal()
+
+    try:
+        owner = create_test_user(db)
+
+        trip = Trip(
+            user_id=owner.id,
+            name="Private Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=1,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        other_user = User(
+            email="other@example.com",
+            password_hash=hash_password("password123"),
+            first_name="Other",
+            last_name="User",
+        )
+
+        db.add(other_user)
+        db.commit()
+        db.refresh(other_user)
+
+        token = create_access_token(other_user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/travel-checklist",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Trip not found"
 
     finally:
         db.close()
