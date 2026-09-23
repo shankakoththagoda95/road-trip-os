@@ -16,6 +16,7 @@ from app.models.vehicle import Vehicle
 from app.models.trip import Trip
 from app.models.trip_destination import TripDestination
 from app.services.tolls import TollProvider
+from app.services.borders import BorderCalculation, BorderCrossing
 
 
 
@@ -615,6 +616,168 @@ def test_get_trip_tolls_returns_400_when_route_calculation_fails(client):
         ):
             response = client.get(
                 f"/trips/{trip.id}/tolls",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Route could not be calculated"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_borders(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        trip = Trip(
+            user_id=user.id,
+            name="Stockholm to Germany",
+            start_location="Stockholm",
+            destination="Germany",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=2,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        mock_result = BorderCalculation(
+            countries=["Sweden", "Denmark", "Germany"],
+            crossings=[
+                BorderCrossing(
+                    from_country="Sweden",
+                    to_country="Denmark",
+                ),
+                BorderCrossing(
+                    from_country="Denmark",
+                    to_country="Germany",
+                ),
+            ],
+        )
+
+        with patch(
+            "app.api.v1.trips.calculate_trip_route_borders",
+            return_value=mock_result,
+        ):
+            response = client.get(
+                f"/trips/{trip.id}/borders",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["trip_id"] == trip.id
+        assert data["countries"] == [
+            "Sweden",
+            "Denmark",
+            "Germany",
+        ]
+
+        assert len(data["crossings"]) == 2
+
+        assert data["crossings"][0]["from_country"] == "Sweden"
+        assert data["crossings"][0]["to_country"] == "Denmark"
+        assert data["crossings"][0]["location"] is None
+
+        assert data["crossings"][1]["from_country"] == "Denmark"
+        assert data["crossings"][1]["to_country"] == "Germany"
+        assert data["crossings"][1]["location"] is None
+
+    finally:
+        db.close()
+
+
+def test_get_trip_borders_cannot_access_another_users_trip(client):
+    db = TestingSessionLocal()
+
+    try:
+        owner = create_test_user(db)
+
+        trip = Trip(
+            user_id=owner.id,
+            name="Private Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        other_user = User(
+            email="other@example.com",
+            password_hash=hash_password("password123"),
+            first_name="Other",
+            last_name="User",
+        )
+
+        db.add(other_user)
+        db.commit()
+        db.refresh(other_user)
+
+        token = create_access_token(other_user.id)
+
+        response = client.get(
+            f"/trips/{trip.id}/borders",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Trip not found"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_borders_returns_400_when_route_calculation_fails(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+
+        trip = Trip(
+            user_id=user.id,
+            name="Invalid Route Trip",
+            start_location="Stockholm",
+            destination="Gothenburg",
+            trip_type="one_way",
+            departure_at=datetime.now() + timedelta(days=1),
+            travelers=2,
+            duration_days=1,
+        )
+
+        db.add(trip)
+        db.commit()
+        db.refresh(trip)
+
+        token = create_access_token(user.id)
+
+        with patch(
+            "app.api.v1.trips.calculate_trip_route_borders",
+            side_effect=ValueError("Route could not be calculated"),
+        ):
+            response = client.get(
+                f"/trips/{trip.id}/borders",
                 headers={
                     "Authorization": f"Bearer {token}",
                 },

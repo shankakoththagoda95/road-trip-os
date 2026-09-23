@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
+from app.schemas.borders import BorderCalculationResponse
 from app.schemas.fuel_range import TripFuelStatusResponse
 from app.schemas.trip import TripCreate, TripResponse, TripUpdate
 from app.schemas.route import RoutePreference, TripRouteResponse
@@ -17,7 +18,9 @@ from app.services.tolls import TollProvider
 from app.services.route_constraints import check_distance_limit
 from app.services.fuel import calculate_trip_fuel_cost, needs_fuel_stop
 from app.services.fuel_tracking import estimate_fuel_remaining
+from app.services.borders import BorderProvider
 from app.services.trip_route import (
+    calculate_trip_route_borders,
     calculate_trip_route_details,
     calculate_trip_route_tolls,
 )
@@ -656,4 +659,52 @@ def calculate_trip_tolls_endpoint(
         "fees": result.fees,
         "total_amount": result.total_amount,
         "currency": result.currency,
+    }
+
+
+@router.get(
+    "/{trip_id}/borders",
+    response_model=BorderCalculationResponse,
+)
+def calculate_trip_borders_endpoint(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    destinations = db.scalars(
+        select(TripDestination)
+        .where(TripDestination.trip_id == trip_id)
+        .order_by(TripDestination.stop_order)
+    ).all()
+
+    try:
+        result = calculate_trip_route_borders(
+            trip=trip,
+            destinations=destinations,
+            preference=RoutePreference.FASTEST,
+            provider=BorderProvider(),
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    return {
+        "trip_id": trip.id,
+        "crossings": result.crossings,
+        "countries": result.countries,
     }

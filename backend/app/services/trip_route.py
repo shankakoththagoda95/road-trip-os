@@ -11,6 +11,11 @@ from app.services.route_constraints import (
     check_distance_limit,
     split_route_into_days,
 )
+from app.services.borders import (
+    BorderCalculation,
+    BorderProvider,
+    calculate_route_borders,
+)
 
 
 def calculate_trip_route_details(
@@ -108,4 +113,24 @@ def calculate_trip_route_tolls(
         route_coordinates=route_coordinates,
         provider=provider,
         currency=currency,
+    )
+
+
+def calculate_trip_route_borders(
+    trip: Trip,
+    destinations: list[TripDestination],
+    preference: RoutePreference,
+    provider: BorderProvider,
+) -> BorderCalculation:
+    route_details = calculate_trip_route_details(
+        trip=trip,
+        destinations=destinations,
+        preference=preference,
+    )
+
+    route_coordinates = route_details["route"]["geometry"]["coordinates"]
+
+    return calculate_route_borders(
+        route_coordinates=route_coordinates,
+        provider=provider,
     )
