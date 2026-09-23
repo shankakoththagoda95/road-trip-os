@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from fastapi.responses import Response
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
@@ -10,6 +11,12 @@ from app.models.trip import Trip
 from app.models.trip_destination import TripDestination
 from app.models.user import User
 from app.services.itinerary import generate_itinerary_days
+from app.schemas.calendar import CalendarResponse
+from app.services.calendar import (
+    generate_trip_calendar_events,
+    generate_trip_ical_calendar,
+)
+
 
 
 router = APIRouter(
@@ -155,3 +162,102 @@ def get_itinerary(
             for day in days
         ],
     }
+
+
+@router.get(
+    "/trips/{trip_id}/calendar",
+    response_model=CalendarResponse,
+)
+def get_trip_calendar(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    itinerary = db.scalar(
+        select(Itinerary)
+        .where(Itinerary.trip_id == trip.id)
+        .order_by(Itinerary.id.desc())
+    )
+
+    if itinerary is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Itinerary not found",
+        )
+
+    days = db.scalars(
+        select(ItineraryDay)
+        .where(ItineraryDay.itinerary_id == itinerary.id)
+        .order_by(ItineraryDay.day_number)
+    ).all()
+
+    events = generate_trip_calendar_events(
+        trip=trip,
+        days=days,
+    )
+
+    return {
+        "trip_id": trip.id,
+        "events": events,
+    }
+
+
+@router.get("/trips/{trip_id}/calendar.ics")
+def get_trip_calendar_ics(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    itinerary = db.scalar(
+        select(Itinerary)
+        .where(Itinerary.trip_id == trip.id)
+        .order_by(Itinerary.id.desc())
+    )
+
+    if itinerary is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Itinerary not found",
+        )
+
+    days = db.scalars(
+        select(ItineraryDay)
+        .where(ItineraryDay.itinerary_id == itinerary.id)
+        .order_by(ItineraryDay.day_number)
+    ).all()
+
+    calendar = generate_trip_ical_calendar(
+        trip=trip,
+        days=days,
+    )
+
+    return Response(
+        content=calendar,
+        media_type="text/calendar",
+    )

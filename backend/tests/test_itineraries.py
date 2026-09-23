@@ -364,3 +364,251 @@ def test_user_cannot_access_another_users_itinerary():
 
     finally:
         db.close()
+
+
+def test_get_trip_calendar():
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+        trip = create_test_trip(db, user.id)
+
+        itinerary = Itinerary(
+            trip_id=trip.id,
+        )
+
+        db.add(itinerary)
+        db.flush()
+
+        db.add_all(
+            [
+                ItineraryDay(
+                    itinerary_id=itinerary.id,
+                    day_number=1,
+                    total_distance_meters=450000,
+                    total_duration_seconds=14400,
+                    distance_status="within_limit",
+                    driving_time_status="within_limit",
+                ),
+                ItineraryDay(
+                    itinerary_id=itinerary.id,
+                    day_number=2,
+                    total_distance_meters=450000,
+                    total_duration_seconds=14400,
+                    distance_status="within_limit",
+                    driving_time_status="within_limit",
+                ),
+            ]
+        )
+
+        db.commit()
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/itineraries/trips/{trip.id}/calendar",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["trip_id"] == trip.id
+        assert len(data["events"]) == 2
+
+        assert data["events"][0]["title"] == "Road Trip — Day 1"
+        assert data["events"][0]["start_at"] == (
+            trip.departure_at.isoformat()
+        )
+
+        assert data["events"][1]["title"] == "Road Trip — Day 2"
+
+    finally:
+        db.close()
+
+
+def test_user_cannot_access_another_users_calendar():
+    db = TestingSessionLocal()
+
+    try:
+        owner = create_test_user(db)
+        trip = create_test_trip(db, owner.id)
+
+        itinerary = Itinerary(
+            trip_id=trip.id,
+        )
+
+        db.add(itinerary)
+        db.commit()
+
+        other_user = User(
+            email="other@example.com",
+            password_hash=hash_password("password123"),
+            first_name="Other",
+            last_name="User",
+        )
+
+        db.add(other_user)
+        db.commit()
+        db.refresh(other_user)
+
+        token = create_access_token(other_user.id)
+
+        response = client.get(
+            f"/itineraries/trips/{trip.id}/calendar",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Trip not found"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_calendar_returns_404_when_itinerary_does_not_exist():
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+        trip = create_test_trip(db, user.id)
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/itineraries/trips/{trip.id}/calendar",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Itinerary not found"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_calendar_ics():
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+        trip = create_test_trip(db, user.id)
+
+        itinerary = Itinerary(
+            trip_id=trip.id,
+        )
+
+        db.add(itinerary)
+        db.flush()
+
+        db.add(
+            ItineraryDay(
+                itinerary_id=itinerary.id,
+                day_number=1,
+                total_distance_meters=450000,
+                total_duration_seconds=14400,
+                distance_status="within_limit",
+                driving_time_status="within_limit",
+            )
+        )
+
+        db.commit()
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/itineraries/trips/{trip.id}/calendar.ics",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith(
+            "text/calendar"
+        )
+
+        data = response.text
+
+        assert "BEGIN:VCALENDAR" in data
+        assert "VERSION:2.0" in data
+        assert "BEGIN:VEVENT" in data
+        assert "SUMMARY:Road Trip — Day 1" in data
+        assert "DTSTART:" in data
+        assert "DTEND:" in data
+        assert "END:VEVENT" in data
+        assert "END:VCALENDAR" in data
+
+    finally:
+        db.close()
+
+
+def test_user_cannot_access_another_users_calendar_ics():
+    db = TestingSessionLocal()
+
+    try:
+        owner = create_test_user(db)
+        trip = create_test_trip(db, owner.id)
+
+        itinerary = Itinerary(
+            trip_id=trip.id,
+        )
+
+        db.add(itinerary)
+        db.commit()
+
+        other_user = User(
+            email="other@example.com",
+            password_hash=hash_password("password123"),
+            first_name="Other",
+            last_name="User",
+        )
+
+        db.add(other_user)
+        db.commit()
+        db.refresh(other_user)
+
+        token = create_access_token(other_user.id)
+
+        response = client.get(
+            f"/itineraries/trips/{trip.id}/calendar.ics",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Trip not found"
+
+    finally:
+        db.close()
+
+
+def test_get_trip_calendar_ics_returns_404_when_itinerary_does_not_exist():
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+        trip = create_test_trip(db, user.id)
+
+        token = create_access_token(user.id)
+
+        response = client.get(
+            f"/itineraries/trips/{trip.id}/calendar.ics",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Itinerary not found"
+
+    finally:
+        db.close()
