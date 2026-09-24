@@ -1,4 +1,8 @@
+import os
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api.v1.auth import router as auth_router
@@ -18,9 +22,31 @@ from app.api.v1.ev_status import router as ev_status_router
 from app.api.v1.trip_budget import router as trip_budget_router
 from app.api.v1.weather import router as weather_router
 from app.api.v1.elevation import router as elevation_router
+from app.api.v1.routes import router as routes_router
+
+
+load_dotenv()
+
+# Comma-separated list of origins allowed to call the API from a browser.
+# Defaults to the Expo web dev server.
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:8081,http://127.0.0.1:8081",
+    ).split(",")
+    if origin.strip()
+]
 
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 app.include_router(users_router)
@@ -38,6 +64,7 @@ app.include_router(ev_status_router)
 app.include_router(trip_budget_router)
 app.include_router(weather_router)
 app.include_router(elevation_router)
+app.include_router(routes_router)
 
 
 @app.get("/")

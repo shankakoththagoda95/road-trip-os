@@ -4,9 +4,11 @@ import httpx
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 
 
-def geocode_location(location: str) -> tuple[float, float]:
+def search_location(location: str) -> dict:
     """
-    Convert a location name into latitude and longitude.
+    Find the best match for a location name.
+
+    Returns the matched display name and its coordinates.
     """
 
     params = {
@@ -35,7 +37,21 @@ def geocode_location(location: str) -> tuple[float, float]:
             f"Location not found: {location}"
         )
 
+    return {
+        "display_name": results[0]["display_name"],
+        "latitude": float(results[0]["lat"]),
+        "longitude": float(results[0]["lon"]),
+    }
+
+
+def geocode_location(location: str) -> tuple[float, float]:
+    """
+    Convert a location name into latitude and longitude.
+    """
+
+    result = search_location(location)
+
     return (
-        float(results[0]["lat"]),
-        float(results[0]["lon"]),
+        result["latitude"],
+        result["longitude"],
     )

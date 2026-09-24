@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -64,3 +64,31 @@ def test_trip_update_rejects_invalid_vehicle_id(vehicle_id):
             **valid_trip_data(),
             vehicle_id=vehicle_id,
         )
+
+@pytest.mark.parametrize("schema", [TripCreate, TripUpdate])
+def test_trip_accepts_timezone_aware_departure_as_local_time(schema):
+    departure_at = (datetime.now() + timedelta(days=1)).replace(
+        hour=9,
+        minute=0,
+        second=0,
+        microsecond=0,
+        tzinfo=timezone(timedelta(hours=2)),
+    )
+
+    trip = schema(
+        **{**valid_trip_data(), "departure_at": departure_at},
+    )
+
+    assert trip.departure_at.tzinfo is None
+    assert trip.departure_at.hour == 9
+
+
+@pytest.mark.parametrize("schema", [TripCreate, TripUpdate])
+def test_trip_rejects_timezone_aware_past_departure(schema):
+    departure_at = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    with pytest.raises(ValidationError, match="cannot be in the past"):
+        schema(
+            **{**valid_trip_data(), "departure_at": departure_at},
+        )
+

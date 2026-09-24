@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -128,6 +128,40 @@ def test_create_trip_with_vehicle(client):
 
         assert data["name"] == "Stockholm to Oslo"
         assert data["vehicle_id"] == vehicle.id
+
+    finally:
+        db.close()
+
+
+def test_create_trip_accepts_utc_departure_string(client):
+    db = TestingSessionLocal()
+
+    try:
+        user = create_test_user(db)
+        token = create_access_token(user.id)
+
+        departure_at = datetime.now(timezone.utc) + timedelta(days=1)
+
+        response = client.post(
+            "/trips/",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+            json={
+                "name": "Stockholm to Oslo",
+                "start_location": "Stockholm",
+                "destination": "Oslo",
+                "trip_type": "one_way",
+                "departure_at": departure_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "travelers": 2,
+                "duration_days": 2,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["departure_at"] == departure_at.strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )
 
     finally:
         db.close()

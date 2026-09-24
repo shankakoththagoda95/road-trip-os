@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
@@ -7,6 +7,25 @@ from pydantic import BaseModel, Field, field_validator
 class TripType(str, Enum):
     ONE_WAY = "one_way"
     ROUND_TRIP = "round_trip"
+
+def validate_departure(value: datetime) -> datetime:
+    """
+    Rejects past departures and returns a naive datetime.
+
+    Departure times are stored as local wall-clock time (no timezone).
+    A timezone-aware value keeps its local time and drops the offset,
+    so "09:00+02:00" is stored as 09:00.
+    """
+    if value.tzinfo is None:
+        is_past = value < datetime.now()
+    else:
+        is_past = value < datetime.now(timezone.utc)
+
+    if is_past:
+        raise ValueError("Departure time cannot be in the past")
+
+    return value.replace(tzinfo=None)
+
 
 class TripCreate(BaseModel):
     name: str
@@ -23,10 +42,7 @@ class TripCreate(BaseModel):
     @field_validator("departure_at")
     @classmethod
     def validate_departure_at(cls, value: datetime) -> datetime:
-        if value < datetime.now():
-            raise ValueError("Departure time cannot be in the past")
-
-        return value
+        return validate_departure(value)
 
 
 class TripUpdate(BaseModel):
@@ -44,10 +60,7 @@ class TripUpdate(BaseModel):
     @field_validator("departure_at")
     @classmethod
     def validate_departure_at(cls, value: datetime) -> datetime:
-        if value < datetime.now():
-            raise ValueError("Departure time cannot be in the past")
-    
-        return value
+        return validate_departure(value)
 
 
 class TripResponse(BaseModel):

@@ -610,6 +610,7 @@ def calculate_trip_route_endpoint(
             }
             for day in days
         ],
+        "geometry": route.get("geometry"),
     }
 
 
