@@ -12,16 +12,20 @@ export class ApiError extends Error {
   readonly status: number;
   // Validation messages keyed by request field name (e.g. `email`).
   readonly fieldErrors: Record<string, string>;
+  // Machine-readable reason for some errors, e.g. `email_not_verified`.
+  readonly code: string | null;
 
   constructor(
     status: number,
     message: string,
     fieldErrors: Record<string, string> = {},
+    code: string | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.fieldErrors = fieldErrors;
+    this.code = code;
   }
 }
 
@@ -88,13 +92,24 @@ export async function apiRequest<T>(
 
 type ValidationIssue = { loc?: (string | number)[]; msg?: string };
 
-// FastAPI errors are `{ detail: string }` or, for 422s,
-// `{ detail: [{ loc: ['body', 'email'], msg: '...' }] }`.
+// FastAPI errors are `{ detail: string }`, `{ detail: { code, message } }`
+// or, for 422s, `{ detail: [{ loc: ['body', 'email'], msg: '...' }] }`.
 function toApiError(status: number, data: unknown): ApiError {
   const detail = (data as { detail?: unknown } | undefined)?.detail;
 
   if (typeof detail === 'string') {
     return new ApiError(status, detail);
+  }
+
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const { code, message } = detail as { code?: string; message?: string };
+
+    return new ApiError(
+      status,
+      message ?? `Request failed (${status}).`,
+      {},
+      code ?? null,
+    );
   }
 
   if (Array.isArray(detail)) {

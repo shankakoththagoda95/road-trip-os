@@ -18,3 +18,25 @@ class User(Base):
         DateTime,
         default=datetime.utcnow,
     )
+
+    # Null until the user clicks the link in the verification email.
+    # Unverified users can't sign in.
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    # When the last verification / password reset email was sent, used to
+    # stop the "send again" buttons from spamming inboxes.
+    verification_email_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    password_reset_email_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    @property
+    def email_verified(self) -> bool:
+        return self.email_verified_at is not None

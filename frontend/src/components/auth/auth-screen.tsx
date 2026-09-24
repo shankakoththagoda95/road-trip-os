@@ -14,9 +14,9 @@ type AuthScreenProps = PropsWithChildren<{
   subtitle: string;
   // Error that isn't tied to a single field, e.g. "Invalid email or password".
   formError?: string | null;
-  footerText: string;
-  footerLinkLabel: string;
-  footerHref: Href;
+  footerText?: string;
+  footerLinkLabel?: string;
+  footerHref?: Href;
 }>;
 
 /**
@@ -60,12 +60,16 @@ export function AuthScreen({
         {children}
       </ThemedView>
 
-      <View style={styles.footer}>
-        <ThemedText style={styles.footerText}>{footerText}</ThemedText>
-        <Link href={footerHref} replace>
-          <ThemedText style={styles.footerLink}>{footerLinkLabel}</ThemedText>
-        </Link>
-      </View>
+      {footerHref && footerLinkLabel ? (
+        <View style={styles.footer}>
+          {footerText ? (
+            <ThemedText style={styles.footerText}>{footerText}</ThemedText>
+          ) : null}
+          <Link href={footerHref} replace>
+            <ThemedText style={styles.footerLink}>{footerLinkLabel}</ThemedText>
+          </Link>
+        </View>
+      ) : null}
     </Screen>
   );
 }

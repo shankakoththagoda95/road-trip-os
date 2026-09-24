@@ -119,9 +119,9 @@ def test_overpass_provider_converts_response_to_fuel_stations():
         ]
     }
 
-    with patch("httpx.get") as mock_get:
-        mock_get.return_value.json.return_value = fake_response
-        mock_get.return_value.raise_for_status.return_value = None
+    with patch("httpx.post") as mock_post:
+        mock_post.return_value.json.return_value = fake_response
+        mock_post.return_value.raise_for_status.return_value = None
 
         stations = provider.search_nearby(
             latitude=59.3293,
@@ -170,9 +170,9 @@ def test_fuel_station_service_finds_nearby_stations():
         ]
     }
 
-    with patch("httpx.get") as mock_get:
-        mock_get.return_value.json.return_value = fake_response
-        mock_get.return_value.raise_for_status.return_value = None
+    with patch("httpx.post") as mock_post:
+        mock_post.return_value.json.return_value = fake_response
+        mock_post.return_value.raise_for_status.return_value = None
 
         stations = service.find_nearby(
             latitude=59.3293,
@@ -203,9 +203,9 @@ def test_nearby_fuel_stations_endpoint(client, test_user):
         ]
     }
 
-    with patch("httpx.get") as mock_get:
-        mock_get.return_value.json.return_value = fake_response
-        mock_get.return_value.raise_for_status.return_value = None
+    with patch("httpx.post") as mock_post:
+        mock_post.return_value.json.return_value = fake_response
+        mock_post.return_value.raise_for_status.return_value = None
 
         response = client.get(
             "/fuel-stations/nearby",
@@ -324,9 +324,9 @@ def test_nearest_fuel_station_endpoint(client, test_user):
         ]
     }
 
-    with patch("httpx.get") as mock_get:
-        mock_get.return_value.json.return_value = fake_response
-        mock_get.return_value.raise_for_status.return_value = None
+    with patch("httpx.post") as mock_post:
+        mock_post.return_value.json.return_value = fake_response
+        mock_post.return_value.raise_for_status.return_value = None
 
         response = client.get(
             "/fuel-stations/nearest",
@@ -466,9 +466,9 @@ def test_fuel_stations_along_route_endpoint(client, test_user):
         ]
     }
 
-    with patch("httpx.get") as mock_get:
-        mock_get.return_value.json.return_value = fake_response
-        mock_get.return_value.raise_for_status.return_value = None
+    with patch("httpx.post") as mock_post:
+        mock_post.return_value.json.return_value = fake_response
+        mock_post.return_value.raise_for_status.return_value = None
 
         response = client.post(
             "/fuel-stations/along-route",

@@ -43,7 +43,7 @@ class OverpassFuelStationProvider(FuelStationProvider):
         radius_meters = radius_km * 1000
 
         query = f"""
-        [out:json];
+        [out:json][timeout:25];
         nwr[
             amenity=fuel
         ](
@@ -52,9 +52,13 @@ class OverpassFuelStationProvider(FuelStationProvider):
         out center;
         """
 
-        response = httpx.get(
+        # Overpass rejects requests without an identifying User-Agent (406).
+        response = httpx.post(
             self.OVERPASS_URL,
-            params={"data": query},
+            data={"data": query},
+            headers={
+                "User-Agent": "Road-Trip-OS/1.0 (development project)",
+            },
             timeout=30.0,
         )
 

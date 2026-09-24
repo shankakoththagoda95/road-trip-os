@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
   Image,
   Pressable,
@@ -25,7 +26,9 @@ export default function NewTripScreen() {
   const colors = useTheme();
   const { width } = useWindowDimensions();
   const compact = width < CompactBreakpoint;
-  const { completedSteps } = useTripDraft();
+  const { completedSteps, draft, isPristine, restored, reset } =
+    useTripDraft();
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   // First unfinished step that has been built.
   const nextStep = TripSteps.find(
@@ -65,6 +68,52 @@ export default function NewTripScreen() {
       </View>
 
       <StepProgress />
+
+      {!isPristine && (
+        <View style={styles.draftBar}>
+          {confirmingReset ? (
+            <>
+              <ThemedText type="small" style={styles.mutedLightText}>
+                Discard this draft and start again?
+              </ThemedText>
+              <View style={styles.draftActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    reset();
+                    setConfirmingReset(false);
+                  }}>
+                  <ThemedText type="smallBold" style={styles.dangerText}>
+                    Discard
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setConfirmingReset(false)}>
+                  <ThemedText type="smallBold" style={styles.lightText}>
+                    Keep it
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <>
+              <ThemedText type="small" style={styles.mutedLightText}>
+                {restored
+                  ? `Welcome back! Your draft${draft.details.name ? ` “${draft.details.name}”` : ''} was restored.`
+                  : 'Your draft is saved on this device.'}
+              </ThemedText>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setConfirmingReset(true)}>
+                <ThemedText type="smallBold" style={styles.lightText}>
+                  Start over
+                </ThemedText>
+              </Pressable>
+            </>
+          )}
+        </View>
+      )}
 
       {nextStep?.href && (
         <Pressable
@@ -195,6 +244,28 @@ const styles = StyleSheet.create({
 
   lightText: {
     color: '#F8FAFC',
+  },
+
+  mutedLightText: {
+    color: '#CBD5E1',
+    flexShrink: 1,
+  },
+
+  dangerText: {
+    color: '#FCA5A5',
+  },
+
+  draftBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+
+  draftActions: {
+    flexDirection: 'row',
+    gap: Spacing.four,
   },
 
   header: {

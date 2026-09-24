@@ -65,16 +65,18 @@ export function RouteMap({ points, line, height = 320 }: RouteMapProps) {
         )}
 
         {points.map((point, index) => {
-          const isStop = point.kind === 'stop';
-          const label = isStop
-            ? `${++stopNumber}. ${point.label}`
-            : point.label;
+          const isEndpoint =
+            point.kind === 'start' || point.kind === 'destination';
+          const label =
+            point.kind === 'stop'
+              ? `${++stopNumber}. ${point.label}`
+              : point.label;
 
           return (
             <CircleMarker
               key={`${point.kind}-${index}`}
               center={[point.latitude, point.longitude]}
-              radius={isStop ? 8 : 10}
+              radius={isEndpoint ? 10 : 8}
               pathOptions={{
                 color: '#FFFFFF',
                 weight: 2,

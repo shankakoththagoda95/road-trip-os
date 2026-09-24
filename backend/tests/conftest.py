@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -67,6 +69,8 @@ def test_user():
             password_hash=hash_password("password123"),
             first_name="Test",
             last_name="User",
+            # An existing account that has confirmed its email.
+            email_verified_at=datetime.utcnow(),
         )
 
         db.add(user)
@@ -76,6 +80,28 @@ def test_user():
         return user
     finally:
         db.close()
+
+
+@pytest.fixture(autouse=True)
+def outbox(monkeypatch):
+    """
+    Capture emails instead of sending them, and skip the DNS lookup when
+    checking sign-up addresses. Tests can inspect the returned list.
+    """
+
+    sent = []
+
+    def capture(message):
+        sent.append(message)
+
+    monkeypatch.setattr("app.api.v1.users.send_email", capture)
+    monkeypatch.setattr("app.api.v1.auth.send_email", capture)
+    monkeypatch.setattr(
+        "app.api.v1.users.check_email_address",
+        lambda email: email.strip().lower(),
+    )
+
+    return sent
 
 
 @pytest.fixture

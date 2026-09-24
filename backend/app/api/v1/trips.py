@@ -18,7 +18,9 @@ from app.services.tolls import TollProvider
 from app.services.route_constraints import check_distance_limit
 from app.services.fuel import calculate_trip_fuel_cost, needs_fuel_stop
 from app.services.fuel_tracking import estimate_fuel_remaining
-from app.services.borders import BorderProvider
+from app.integrations.countries import get_country_locator
+from app.services.geocoding import reverse_country_code
+from app.services.route_countries import NaturalEarthBorderProvider, throttled
 from app.services.trip_route import (
     calculate_trip_route_borders,
     calculate_trip_route_details,
@@ -698,7 +700,10 @@ def calculate_trip_borders_endpoint(
             trip=trip,
             destinations=destinations,
             preference=RoutePreference.FASTEST,
-            provider=BorderProvider(),
+            provider=NaturalEarthBorderProvider(
+                get_country_locator(),
+                verify_country=throttled(reverse_country_code),
+            ),
         )
     except ValueError as error:
         raise HTTPException(
@@ -746,7 +751,10 @@ def calculate_trip_travel_checklist_endpoint(
             trip=trip,
             destinations=destinations,
             preference=RoutePreference.FASTEST,
-            provider=BorderProvider(),
+            provider=NaturalEarthBorderProvider(
+                get_country_locator(),
+                verify_country=throttled(reverse_country_code),
+            ),
         )
     except ValueError as error:
         raise HTTPException(

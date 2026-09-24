@@ -36,7 +36,13 @@ function AppNavigation() {
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="login" />
           <Stack.Screen name="register" />
+          <Stack.Screen name="check-email" />
+          <Stack.Screen name="forgot-password" />
         </Stack.Protected>
+
+        {/* Opened from emailed links, whether or not someone is signed in. */}
+        <Stack.Screen name="verify-email" />
+        <Stack.Screen name="reset-password" />
       </Stack>
     </ThemeProvider>
   );

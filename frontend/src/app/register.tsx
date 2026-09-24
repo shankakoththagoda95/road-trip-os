@@ -5,12 +5,12 @@ import { StyleSheet, View } from 'react-native';
 import type { RegisterData } from '@/api/auth';
 import { ApiError, errorMessage } from '@/api/client';
 import { AuthScreen } from '@/components/auth/auth-screen';
+import { PasswordRequirements } from '@/components/auth/password-requirements';
 import { TextField } from '@/components/form/form-field';
 import { PrimaryButton } from '@/components/form/primary-button';
 import { Spacing } from '@/constants/theme';
 import { useSession } from '@/hooks/use-session';
-
-const MinPasswordLength = 8;
+import { isValidEmail, passwordIsValid } from '@/utils/password';
 
 type RegisterForm = RegisterData & { confirm_password: string };
 type RegisterErrors = Partial<Record<keyof RegisterForm, string>>;
@@ -56,13 +56,16 @@ export default function RegisterScreen() {
     setSubmitting(true);
 
     try {
-      await register({
+      const user = await register({
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         email: form.email.trim(),
         password: form.password,
       });
-      router.replace('/');
+      router.replace({
+        pathname: '/check-email',
+        params: { email: user.email },
+      });
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setErrors({ email: 'An account with this email already exists.' });
@@ -128,11 +131,12 @@ export default function RegisterScreen() {
         value={form.password}
         onChangeText={update('password')}
         error={errors.password}
-        hint={`At least ${MinPasswordLength} characters.`}
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
       />
+
+      <PasswordRequirements password={form.password} />
 
       <TextField
         label="Confirm password"
@@ -166,12 +170,12 @@ function validate(form: RegisterForm): RegisterErrors {
     errors.last_name = 'Enter your last name.';
   }
 
-  if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) {
+  if (!isValidEmail(form.email)) {
     errors.email = 'Enter a valid email address.';
   }
 
-  if (form.password.length < MinPasswordLength) {
-    errors.password = `Use at least ${MinPasswordLength} characters.`;
+  if (!passwordIsValid(form.password)) {
+    errors.password = 'Choose a password that meets the requirements below.';
   }
 
   if (form.confirm_password !== form.password) {

@@ -55,3 +55,47 @@ export function addTripDestination(
     { method: 'POST', body: destination },
   );
 }
+
+export type TripBudgetCreate = {
+  currency: string;
+  estimated_fuel_cost: number;
+  estimated_ev_charging_cost: number;
+  estimated_toll_cost: number;
+  estimated_food_cost: number;
+  estimated_parking_cost: number;
+  estimated_other_cost: number;
+};
+
+export function createTripBudget(tripId: number, budget: TripBudgetCreate) {
+  return apiRequest<TripBudgetCreate & { id: number; estimated_total: number }>(
+    `/trips/${tripId}/budget/`,
+    { method: 'POST', body: budget },
+  );
+}
+
+export function createTripFuel(tripId: number, startingFuelLiters: number) {
+  return apiRequest(`/trips/${tripId}/fuel/`, {
+    method: 'POST',
+    body: {
+      starting_fuel: startingFuelLiters,
+      current_fuel: startingFuelLiters,
+      fuel_used: 0,
+      fuel_cost: 0,
+    },
+  });
+}
+
+export function createTripEv(tripId: number, startingBatteryPercent: number) {
+  return apiRequest(`/trips/${tripId}/ev/`, {
+    method: 'POST',
+    body: { starting_battery_percentage: startingBatteryPercent },
+  });
+}
+
+// Splits the saved trip into driving days and stores them (used for the
+// calendar export).
+export function createItinerary(tripId: number) {
+  return apiRequest(`/itineraries/trips/${tripId}/itinerary`, {
+    method: 'POST',
+  });
+}

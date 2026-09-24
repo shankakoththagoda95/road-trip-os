@@ -2,6 +2,7 @@ import httpx
 
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 
 
 def search_location(location: str) -> dict:
@@ -42,6 +43,34 @@ def search_location(location: str) -> dict:
         "latitude": float(results[0]["lat"]),
         "longitude": float(results[0]["lon"]),
     }
+
+
+def reverse_country_code(latitude: float, longitude: float) -> str | None:
+    """
+    ISO 3166-1 alpha-2 code (upper case) of the country at a point, or None
+    at sea.
+    """
+
+    response = httpx.get(
+        NOMINATIM_REVERSE_URL,
+        params={
+            "lat": latitude,
+            "lon": longitude,
+            "format": "jsonv2",
+            # Country level is enough and cheapest.
+            "zoom": 3,
+        },
+        headers={
+            "User-Agent": "Road-Trip-OS/1.0 (development project)",
+        },
+        timeout=10,
+    )
+
+    response.raise_for_status()
+
+    code = response.json().get("address", {}).get("country_code")
+
+    return code.upper() if code else None
 
 
 def geocode_location(location: str) -> tuple[float, float]:

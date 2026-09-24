@@ -3,6 +3,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.models.user import User
+from app.services.email_tokens import create_verification_token
 
 client = TestClient(app)
 
@@ -20,7 +22,20 @@ def register_and_login_user(email: str):
         },
     )
 
-    assert register_response.status_code == 200
+    assert register_response.status_code == 201
+
+    # Confirm the email the way the emailed link would.
+    user = register_response.json()
+    verify_response = client.post(
+        "/auth/verify-email",
+        json={
+            "token": create_verification_token(
+                User(id=user["id"], email=user["email"]),
+            ),
+        },
+    )
+
+    assert verify_response.status_code == 200
 
     login_response = client.post(
         "/auth/login",

@@ -28,6 +28,7 @@ import {
 } from '@/constants/vehicles';
 import { useTheme } from '@/hooks/use-theme';
 import { useTripDraft } from '@/hooks/use-trip-draft';
+import { parseNumber } from '@/utils/numbers';
 import { currentRoutePreview } from '@/utils/route-draft';
 import { formatDistance } from '@/utils/units';
 
@@ -264,13 +265,6 @@ const emptyForm: VehicleForm = {
   energy_consumption: '',
   battery_capacity: '',
 };
-
-// Accepts "6,5" as well as "6.5". Returns null for empty / invalid input.
-function parseNumber(text: string) {
-  const value = Number.parseFloat(text.replace(',', '.'));
-
-  return Number.isFinite(value) ? value : null;
-}
 
 function AddVehicleForm({
   onCreated,

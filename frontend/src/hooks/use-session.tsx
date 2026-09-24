@@ -20,7 +20,10 @@ type SessionState =
 type SessionContextValue = {
   session: SessionState;
   signIn: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  // Sign in with a token from verify-email / reset-password.
+  signInWithToken: (accessToken: string) => Promise<void>;
+  // Creates the account; the user signs in after confirming their email.
+  register: (data: RegisterData) => Promise<User>;
   signOut: () => void;
 };
 
@@ -81,23 +84,26 @@ export function SessionProvider({ children }: PropsWithChildren) {
     return () => setUnauthorizedHandler(null);
   });
 
-  async function signIn(email: string, password: string) {
-    const { access_token } = await authApi.login(email, password);
-
-    setAuthToken(access_token);
-    await saveToken(access_token);
+  async function signInWithToken(accessToken: string) {
+    setAuthToken(accessToken);
+    await saveToken(accessToken);
 
     const user = await authApi.getMe().catch(() => null);
     setSession({ status: 'signedIn', user });
   }
 
-  async function register(data: RegisterData) {
-    await authApi.register(data);
-    await signIn(data.email, data.password);
+  async function signIn(email: string, password: string) {
+    const { access_token } = await authApi.login(email, password);
+    await signInWithToken(access_token);
+  }
+
+  function register(data: RegisterData) {
+    return authApi.register(data);
   }
 
   return (
-    <SessionContext.Provider value={{ session, signIn, register, signOut }}>
+    <SessionContext.Provider
+      value={{ session, signIn, signInWithToken, register, signOut }}>
       {children}
     </SessionContext.Provider>
   );
