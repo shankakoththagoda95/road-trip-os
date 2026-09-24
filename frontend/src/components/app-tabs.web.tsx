@@ -6,15 +6,14 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 
-import { ExternalLink } from './external-link';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/use-app-theme';
+import { useSession } from '@/hooks/use-session';
+
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
-import { useAppTheme } from '@/hooks/use-app-theme';
-
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AppTabs() {
   return (
@@ -22,10 +21,10 @@ export default function AppTabs() {
       <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
         <CustomTabList>
-          <TabTrigger name="home" href="/" asChild>
+          <TabTrigger name="home" href="/(tabs)" asChild>
             <TabButton>Home</TabButton>
           </TabTrigger>
-          <TabTrigger name="trips" href="/trips" asChild>
+          <TabTrigger name="trips" href="/(tabs)/trips" asChild>
             <TabButton>Trips</TabButton>
           </TabTrigger>
         </CustomTabList>
@@ -50,20 +49,7 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
 
 export function CustomTabList(props: TabListProps) {
   const { theme, toggleTheme } = useAppTheme();
-const colors = Colors[theme];
-
-<Pressable
-  onPress={toggleTheme}
-  accessibilityRole="button"
-  accessibilityLabel="Toggle light and dark mode"
-  style={({ pressed }) => [
-    styles.themeButton,
-    pressed && styles.pressed,
-  ]}>
-  <ThemedText type="small">
-    {theme === 'dark' ? '☀️' : '🌙'}
-  </ThemedText>
-</Pressable>
+  const { signOut } = useSession();
 
   return (
     <View {...props} style={styles.tabListContainer}>
@@ -87,9 +73,14 @@ const colors = Colors[theme];
           </ThemedText>
         </Pressable>
 
-        <ExternalLink href="https://docs.expo.dev" asChild>
-          
-        </ExternalLink>
+        <Pressable
+          onPress={signOut}
+          accessibilityRole="button"
+          style={({ pressed }) => pressed && styles.pressed}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Sign out
+          </ThemedText>
+        </Pressable>
       </ThemedView>
     </View>
   );
@@ -124,13 +115,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.three,
     borderRadius: Spacing.three,
-  },
-  externalPressable: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.one,
-    marginLeft: Spacing.three,
   },
   themeButton: {
     width: 36,

@@ -2,7 +2,6 @@ import {
   createContext,
   type PropsWithChildren,
   useContext,
-  useEffect,
   useState,
 } from 'react';
 
@@ -22,23 +21,13 @@ const AppThemeContext = createContext<AppThemeContextValue | undefined>(
 export function AppThemeProvider({ children }: PropsWithChildren) {
   const systemTheme = useColorScheme();
 
-  const [theme, setTheme] = useState<AppTheme>(
-    systemTheme === 'dark' ? 'dark' : 'light',
-  );
-
-  const [hasUserPreference, setHasUserPreference] = useState(false);
-
-  useEffect(() => {
-    if (!hasUserPreference && systemTheme !== 'unspecified') {
-      setTheme(systemTheme === 'dark' ? 'dark' : 'light');
-    }
-  }, [systemTheme, hasUserPreference]);
+  // Follows the system theme until the user picks one explicitly.
+  const [userTheme, setUserTheme] = useState<AppTheme | null>(null);
+  const theme: AppTheme =
+    userTheme ?? (systemTheme === 'dark' ? 'dark' : 'light');
 
   function toggleTheme() {
-    setHasUserPreference(true);
-    setTheme((currentTheme) =>
-      currentTheme === 'dark' ? 'light' : 'dark',
-    );
+    setUserTheme(theme === 'dark' ? 'light' : 'dark');
   }
 
   return (
