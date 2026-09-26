@@ -1,5 +1,5 @@
 import { vehicleRangeKm } from '@/constants/vehicles';
-import type { TripDraft } from '@/hooks/use-trip-draft';
+import type { BudgetDraft, TripDraft } from '@/hooks/use-trip-draft';
 import { parseNumber } from '@/utils/numbers';
 import { currentRoutePreview } from '@/utils/route-draft';
 
@@ -118,4 +118,48 @@ function energyEstimate(amountNeeded: number, priceText: string) {
     unitPrice,
     cost: unitPrice !== null ? amountNeeded * Math.max(0, unitPrice) : 0,
   };
+}
+
+// Rough European averages in EUR, used by "Use typical prices". Parking is
+// per day of the trip.
+const TypicalPricesEur = {
+  fuelPerLiter: 1.8,
+  electricityPerKwh: 0.45,
+  foodPerPersonPerDay: 35,
+  parkingPerDay: 10,
+};
+
+// Approximate EUR exchange rates; only for the typical-price presets.
+const EurRates: Record<Currency, number> = {
+  EUR: 1,
+  SEK: 11.5,
+  NOK: 11.7,
+  DKK: 7.46,
+  GBP: 0.85,
+  USD: 1.08,
+};
+
+/**
+ * Typical prices for the fields that are still empty, in the chosen
+ * currency. Filled-in fields are left alone.
+ */
+export function typicalPrices(draft: TripDraft): Partial<BudgetDraft> {
+  const { budget, details } = draft;
+  const rate = EurRates[budget.currency as Currency] ?? 1;
+  const typical = TypicalPricesEur;
+
+  const values: Partial<BudgetDraft> = {
+    fuelPricePerLiter: (typical.fuelPerLiter * rate).toFixed(2),
+    electricityPricePerKwh: (typical.electricityPerKwh * rate).toFixed(2),
+    foodPerPersonPerDay: String(Math.round(typical.foodPerPersonPerDay * rate)),
+    parkingCost: String(
+      Math.round(typical.parkingPerDay * rate * details.durationDays),
+    ),
+  };
+
+  return Object.fromEntries(
+    Object.entries(values).filter(
+      ([key]) => !budget[key as keyof BudgetDraft].trim(),
+    ),
+  );
 }

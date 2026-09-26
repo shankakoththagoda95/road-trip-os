@@ -21,6 +21,22 @@ def resolve_point(point: RoutePointInput) -> tuple[float, float]:
     return resolve_location(point.location)
 
 
+def stay_nights(request: RoutePreviewRequest) -> list[int]:
+    """
+    Nights at the end of each leg: every stop, the destination, and none
+    after the drive home on a round trip.
+    """
+
+    nights = [stop.nights for stop in request.stops] + [
+        request.destination.nights
+    ]
+
+    if request.trip_type == TripType.ROUND_TRIP:
+        nights.append(0)
+
+    return nights
+
+
 def preview_route(request: RoutePreviewRequest) -> dict:
     """
     Calculate a route for locations that are not saved as a trip yet.

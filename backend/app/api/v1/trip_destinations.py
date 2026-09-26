@@ -78,6 +78,7 @@ def create_destination(
         ),
         latitude=latitude,
         longitude=longitude,
+        nights=destination_data.nights,
     )
 
     db.add(new_destination)
@@ -187,6 +188,7 @@ def update_destination(
 
     destination.location = destination_data.location
     destination.stop_order = destination_data.stop_order
+    destination.nights = destination_data.nights
     
     latitude = destination_data.latitude
     longitude = destination_data.longitude

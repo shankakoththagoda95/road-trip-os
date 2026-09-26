@@ -24,3 +24,7 @@ PASSWORD_RESET_TOKEN_MINUTES = 60
 
 # Minimum time between "send the email again" requests per account.
 EMAIL_RESEND_COOLDOWN_SECONDS = 60
+
+# Google Maps Platform key with "Places API (New)" enabled. Used for stop
+# photos; leave empty to show placeholders instead.
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")

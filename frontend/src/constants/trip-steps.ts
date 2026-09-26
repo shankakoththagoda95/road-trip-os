@@ -33,7 +33,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Trip Details',
     description: 'Name, start, destination, dates and travelers.',
     emoji: '📝',
-    image: require('@/assets/images/new_trip.png'),
+    image: require('@/assets/images/step-icons/details.png'),
     href: '/trips/new/details',
   },
   {
@@ -41,7 +41,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Route & Destinations',
     description: 'Add stops along the way and preview the route.',
     emoji: '🗺️',
-    image: require('@/assets/images/route.png'),
+    image: require('@/assets/images/step-icons/route.png'),
     href: '/trips/new/route',
   },
   {
@@ -49,7 +49,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Vehicle',
     description: 'Pick the vehicle you will be driving.',
     emoji: '🚙',
-    image: require('@/assets/images/vehicle_n_budget.png'),
+    image: require('@/assets/images/step-icons/vehicle.png'),
     href: '/trips/new/vehicle',
   },
   {
@@ -57,6 +57,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Travel Preferences',
     description: 'Daily driving limits and how you like to travel.',
     emoji: '⚙️',
+    image: require('@/assets/images/step-icons/preferences.png'),
     href: '/trips/new/preferences',
   },
   {
@@ -64,6 +65,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Trip Budget',
     description: 'Set a budget and estimate trip costs.',
     emoji: '💰',
+    image: require('@/assets/images/step-icons/budget.png'),
     href: '/trips/new/budget',
   },
   {
@@ -71,6 +73,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Fuel / EV Planning',
     description: 'Fuel stops or charging along the route.',
     emoji: '⛽',
+    image: require('@/assets/images/step-icons/energy.png'),
     href: '/trips/new/energy',
   },
   {
@@ -78,6 +81,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Weather & Conditions',
     description: 'Forecast and terrain along the way.',
     emoji: '🌦️',
+    image: require('@/assets/images/step-icons/conditions.png'),
     href: '/trips/new/conditions',
   },
   {
@@ -85,6 +89,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Road Fees & Borders',
     description: 'Tolls and border crossings on your route.',
     emoji: '🛂',
+    image: require('@/assets/images/step-icons/fees.png'),
     href: '/trips/new/fees',
   },
   {
@@ -92,6 +97,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Travel Checklist',
     description: 'Documents and gear to bring.',
     emoji: '✅',
+    image: require('@/assets/images/step-icons/checklist.png'),
     href: '/trips/new/checklist',
   },
   {
@@ -99,6 +105,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Itinerary Review',
     description: 'Review your day-by-day plan.',
     emoji: '📅',
+    image: require('@/assets/images/step-icons/itinerary.png'),
     href: '/trips/new/itinerary',
   },
   {
@@ -106,6 +113,7 @@ export const TripSteps: readonly TripStep[] = [
     title: 'Trip Summary',
     description: 'Review everything and create your trip.',
     emoji: '🚗',
+    image: require('@/assets/images/step-icons/summary.png'),
     href: '/trips/new/summary',
   },
 ];

@@ -61,3 +61,40 @@ def create_trip_fuel(
     db.refresh(new_fuel)
 
     return new_fuel
+
+
+@router.get("/", response_model=TripFuelResponse)
+def get_trip_fuel(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    The fuel level the trip started with (and what has been used).
+    """
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    record = db.scalar(
+        select(TripFuel).where(
+            TripFuel.trip_id == trip_id,
+        )
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No fuel data for this trip",
+        )
+
+    return record

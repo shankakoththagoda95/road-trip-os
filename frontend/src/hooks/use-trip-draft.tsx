@@ -25,19 +25,25 @@ import {
   loadStoredDraft,
   storeDraft,
 } from '@/utils/draft-storage';
+import { placeKey } from '@/utils/place-key';
 
 export type { TripType };
 
 export type TripDetailsDraft = {
   name: string;
   startLocation: string;
-  destination: string;
+  // Places to visit, in order. The last one is where a one-way trip ends;
+  // a round trip then drives back to `startLocation`.
+  stops: string[];
   tripType: TripType;
   // Local date and time, as `YYYY-MM-DD` and `HH:MM`.
   departureDate: string;
   departureTime: string;
   durationDays: number;
   travelers: number;
+  // Nights at each stop, keyed by placeKey(stop). Missing = 0 (driven
+  // through). Kept when stops are reordered.
+  stayNights: Record<string, number>;
 };
 
 // A location with coordinates, as found by the geocoder.
@@ -51,11 +57,10 @@ export type RoutePlace = {
 };
 
 export type RouteDraft = {
-  // Geocoded start / destination. Only valid while `location` still matches
-  // the text in Trip Details.
-  start: RoutePlace | null;
-  destination: RoutePlace | null;
-  stops: RoutePlace[];
+  // Geocoded places, keyed by the text typed in Trip Details (see
+  // utils/route-draft.ts). Kept when stops are reordered or removed, so
+  // nothing is looked up twice.
+  places: Record<string, RoutePlace>;
   // Last calculated route, tagged with the request it was calculated for.
   preview: { key: string; data: RoutePreview } | null;
 };
@@ -107,8 +112,9 @@ export type TripDraft = {
   fees: { key: string; data: RouteFees } | null;
   // Last generated checklist, tagged with the request it was for.
   checklist: { key: string; items: ChecklistItem[] } | null;
-  // Ticked checklist item ids; kept when the checklist is regenerated.
-  checkedItems: string[];
+  // Things the traveller wants to bring, in the order added. Saved with the
+  // trip and ticked off while travelling (not while planning).
+  personalChecklist: string[];
   // Last day-by-day plan, tagged with the request it was for.
   itinerary: { key: string; data: ItineraryPreview } | null;
 };
@@ -117,17 +123,16 @@ const initialDraft: TripDraft = {
   details: {
     name: '',
     startLocation: '',
-    destination: '',
+    stops: [''],
     tripType: 'one_way',
     departureDate: '',
     departureTime: '09:00',
     durationDays: 1,
     travelers: 1,
+    stayNights: {},
   },
   route: {
-    start: null,
-    destination: null,
-    stops: [],
+    places: {},
     preview: null,
   },
   vehicle: null,
@@ -157,7 +162,7 @@ const initialDraft: TripDraft = {
   conditions: null,
   fees: null,
   checklist: null,
-  checkedItems: [],
+  personalChecklist: [],
   itinerary: null,
 };
 
@@ -172,6 +177,8 @@ type TripDraftContextValue = {
   forgetSavedDraft: () => void;
   updateDetails: (details: Partial<TripDetailsDraft>) => void;
   updateRoute: (route: Partial<RouteDraft>) => void;
+  // Remember a geocoded place (safe to call from effects).
+  rememberPlace: (place: RoutePlace) => void;
   setVehicle: (vehicle: Vehicle | null) => void;
   updatePreferences: (preferences: Partial<PreferencesDraft>) => void;
   updateBudget: (budget: Partial<BudgetDraft>) => void;
@@ -179,7 +186,7 @@ type TripDraftContextValue = {
   setConditions: (conditions: TripDraft['conditions']) => void;
   setFees: (fees: TripDraft['fees']) => void;
   setChecklist: (checklist: TripDraft['checklist']) => void;
-  toggleChecklistItem: (id: string) => void;
+  setPersonalChecklist: (items: string[]) => void;
   setItinerary: (itinerary: TripDraft['itinerary']) => void;
   completedSteps: ReadonlySet<TripStepId>;
   completeStep: (id: TripStepId) => void;
@@ -187,7 +194,8 @@ type TripDraftContextValue = {
 };
 
 // Bump when TripDraft changes shape incompatibly; older saves are ignored.
-const DraftVersion = 1;
+// 2: start + ordered stops instead of start / destination.
+const DraftVersion = 2;
 const SaveDelayMs = 400;
 
 type StoredDraft = {
@@ -325,6 +333,16 @@ export function TripDraftProvider({ children }: PropsWithChildren) {
     }));
   }, []);
 
+  const rememberPlace = useCallback((place: RoutePlace) => {
+    setDraft((current) => ({
+      ...current,
+      route: {
+        ...current.route,
+        places: { ...current.route.places, [placeKey(place.location)]: place },
+      },
+    }));
+  }, []);
+
   const setVehicle = useCallback((vehicle: Vehicle | null) => {
     setDraft((current) => ({ ...current, vehicle }));
   }, []);
@@ -368,13 +386,8 @@ export function TripDraftProvider({ children }: PropsWithChildren) {
     setDraft((current) => ({ ...current, checklist }));
   }, []);
 
-  const toggleChecklistItem = useCallback((id: string) => {
-    setDraft((current) => ({
-      ...current,
-      checkedItems: current.checkedItems.includes(id)
-        ? current.checkedItems.filter((checked) => checked !== id)
-        : [...current.checkedItems, id],
-    }));
+  const setPersonalChecklist = useCallback((personalChecklist: string[]) => {
+    setDraft((current) => ({ ...current, personalChecklist }));
   }, []);
 
   const setItinerary = useCallback((itinerary: TripDraft['itinerary']) => {
@@ -403,6 +416,7 @@ export function TripDraftProvider({ children }: PropsWithChildren) {
       forgetSavedDraft,
       updateDetails,
       updateRoute,
+      rememberPlace,
       setVehicle,
       updatePreferences,
       updateBudget,
@@ -410,7 +424,7 @@ export function TripDraftProvider({ children }: PropsWithChildren) {
       setConditions,
       setFees,
       setChecklist,
-      toggleChecklistItem,
+      setPersonalChecklist,
       setItinerary,
       completedSteps,
       completeStep,
@@ -423,6 +437,7 @@ export function TripDraftProvider({ children }: PropsWithChildren) {
       forgetSavedDraft,
       updateDetails,
       updateRoute,
+      rememberPlace,
       setVehicle,
       updatePreferences,
       updateBudget,
@@ -430,7 +445,7 @@ export function TripDraftProvider({ children }: PropsWithChildren) {
       setConditions,
       setFees,
       setChecklist,
-      toggleChecklistItem,
+      setPersonalChecklist,
       setItinerary,
       completedSteps,
       completeStep,

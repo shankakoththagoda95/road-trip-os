@@ -2,33 +2,21 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
-import { ApiError, errorMessage } from '@/api/client';
-import {
-  createVehicle,
-  type FuelType,
-  listVehicles,
-  type Vehicle,
-  type VehicleType,
-} from '@/api/vehicles';
-import { ChipSelect } from '@/components/form/chip-select';
-import { FormField, TextField } from '@/components/form/form-field';
-import { PrimaryButton } from '@/components/form/primary-button';
+import { errorMessage } from '@/api/client';
+import { listVehicles, type Vehicle } from '@/api/vehicles';
 import { WizardStepScreen } from '@/components/new-trip/wizard-step-screen';
 import { ThemedText } from '@/components/themed-text';
+import { VehicleForm } from '@/components/vehicles/vehicle-form';
+import { VehicleIcon } from '@/components/vehicles/vehicle-icon';
 import { getTripStep } from '@/constants/trip-steps';
 import { Spacing } from '@/constants/theme';
 import {
-  FuelTypeOptions,
   fuelTypeLabel,
-  usesBattery,
-  usesFuel,
-  vehicleEmoji,
+  vehicleMakeModel,
   vehicleRangeKm,
-  VehicleTypeOptions,
 } from '@/constants/vehicles';
 import { useTheme } from '@/hooks/use-theme';
 import { useTripDraft } from '@/hooks/use-trip-draft';
-import { parseNumber } from '@/utils/numbers';
 import { currentRoutePreview } from '@/utils/route-draft';
 import { formatDistance } from '@/utils/units';
 
@@ -92,7 +80,7 @@ export default function VehicleStepScreen() {
     <WizardStepScreen
       stepId="vehicle"
       onContinue={handleContinue}
-      continueLabel={draft.vehicle ? 'Continue' : 'Skip for now'}>
+      continueLabel={draft.vehicle ? undefined : 'Skip for now'}>
       {state.status === 'loading' && (
         <ActivityIndicator color={colors.primary} />
       )}
@@ -129,8 +117,8 @@ export default function VehicleStepScreen() {
 
       {state.status === 'loaded' &&
         (formOpen ? (
-          <AddVehicleForm
-            onCreated={handleCreated}
+          <VehicleForm
+            onSaved={handleCreated}
             onCancel={vehicles.length > 0 ? () => setShowForm(false) : undefined}
           />
         ) : (
@@ -198,13 +186,17 @@ function VehicleOption({
         },
         pressed && styles.pressed,
       ]}>
-      <ThemedText style={styles.optionEmoji}>
-        {vehicleEmoji(vehicle.vehicle_type)}
-      </ThemedText>
+      <VehicleIcon type={vehicle.vehicle_type} size={44} />
 
       <View style={styles.optionText}>
         <ThemedText type="smallBold" style={styles.optionName}>
           {vehicle.name}
+          {vehicleMakeModel(vehicle) ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              {'  '}
+              {vehicleMakeModel(vehicle)}
+            </ThemedText>
+          ) : null}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {specs.join(' · ')}
@@ -244,216 +236,6 @@ function rangeSummary(routeKm: number, rangeKm: number, isElectric: boolean) {
   return `about ${stops} ${noun} stop${stops === 1 ? '' : 's'}`;
 }
 
-type VehicleForm = {
-  name: string;
-  vehicle_type: VehicleType;
-  fuel_type: FuelType;
-  fuel_consumption: string;
-  tank_capacity: string;
-  energy_consumption: string;
-  battery_capacity: string;
-};
-
-type VehicleFormErrors = Partial<Record<keyof VehicleForm, string>>;
-
-const emptyForm: VehicleForm = {
-  name: '',
-  vehicle_type: 'car',
-  fuel_type: 'petrol',
-  fuel_consumption: '',
-  tank_capacity: '',
-  energy_consumption: '',
-  battery_capacity: '',
-};
-
-function AddVehicleForm({
-  onCreated,
-  onCancel,
-}: {
-  onCreated: (vehicle: Vehicle) => void;
-  onCancel?: () => void;
-}) {
-  const colors = useTheme();
-  const [form, setForm] = useState<VehicleForm>(emptyForm);
-  const [errors, setErrors] = useState<VehicleFormErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const needsFuel = usesFuel(form.fuel_type);
-  const needsBattery = usesBattery(form.fuel_type);
-
-  function update<K extends keyof VehicleForm>(field: K) {
-    return (value: VehicleForm[K]) => {
-      setForm((current) => ({ ...current, [field]: value }));
-      setErrors((current) => ({ ...current, [field]: undefined }));
-    };
-  }
-
-  function validate() {
-    const next: VehicleFormErrors = {};
-
-    if (!form.name.trim()) {
-      next.name = 'Give the vehicle a name.';
-    }
-
-    const required: (keyof VehicleForm)[] = [
-      ...(needsFuel ? (['fuel_consumption', 'tank_capacity'] as const) : []),
-      ...(needsBattery
-        ? (['energy_consumption', 'battery_capacity'] as const)
-        : []),
-    ];
-
-    for (const field of required) {
-      const value = parseNumber(form[field]);
-
-      if (value === null || value <= 0) {
-        next[field] = 'Enter a number greater than 0.';
-      }
-    }
-
-    return next;
-  }
-
-  async function handleSave() {
-    const validationErrors = validate();
-    setErrors(validationErrors);
-    setFormError(null);
-
-    if (Object.keys(validationErrors).length > 0) {
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const vehicle = await createVehicle({
-        name: form.name.trim(),
-        vehicle_type: form.vehicle_type,
-        fuel_type: form.fuel_type,
-        fuel_consumption: needsFuel ? parseNumber(form.fuel_consumption) : null,
-        tank_capacity: needsFuel ? parseNumber(form.tank_capacity) : null,
-        energy_consumption: needsBattery
-          ? parseNumber(form.energy_consumption)
-          : null,
-        battery_capacity: needsBattery
-          ? parseNumber(form.battery_capacity)
-          : null,
-      });
-
-      onCreated(vehicle);
-    } catch (error) {
-      if (error instanceof ApiError && Object.keys(error.fieldErrors).length) {
-        setErrors(error.fieldErrors);
-      } else {
-        setFormError(errorMessage(error));
-      }
-
-      setSaving(false);
-    }
-  }
-
-  return (
-    <View style={[styles.form, { borderColor: colors.border }]}>
-      <View style={styles.formHeader}>
-        <ThemedText type="smallBold" style={styles.formTitle}>
-          Add a vehicle
-        </ThemedText>
-        {onCancel && (
-          <Pressable accessibilityRole="button" onPress={onCancel}>
-            <ThemedText type="linkPrimary">Cancel</ThemedText>
-          </Pressable>
-        )}
-      </View>
-
-      <TextField
-        label="Name"
-        placeholder="e.g. Family Volvo"
-        value={form.name}
-        onChangeText={update('name')}
-        error={errors.name}
-      />
-
-      <FormField label="Type">
-        <ChipSelect
-          options={VehicleTypeOptions}
-          value={form.vehicle_type}
-          onChange={update('vehicle_type')}
-        />
-      </FormField>
-
-      <FormField label="Fuel">
-        <ChipSelect
-          options={FuelTypeOptions}
-          value={form.fuel_type}
-          onChange={update('fuel_type')}
-        />
-      </FormField>
-
-      {needsFuel && (
-        <View style={styles.row}>
-          <View style={styles.column}>
-            <TextField
-              label="Fuel consumption (L/100 km)"
-              placeholder="e.g. 6.5"
-              keyboardType="decimal-pad"
-              value={form.fuel_consumption}
-              onChangeText={update('fuel_consumption')}
-              error={errors.fuel_consumption}
-            />
-          </View>
-          <View style={styles.column}>
-            <TextField
-              label="Tank size (L)"
-              placeholder="e.g. 55"
-              keyboardType="decimal-pad"
-              value={form.tank_capacity}
-              onChangeText={update('tank_capacity')}
-              error={errors.tank_capacity}
-            />
-          </View>
-        </View>
-      )}
-
-      {needsBattery && (
-        <View style={styles.row}>
-          <View style={styles.column}>
-            <TextField
-              label="Energy use (kWh/100 km)"
-              placeholder="e.g. 17"
-              keyboardType="decimal-pad"
-              value={form.energy_consumption}
-              onChangeText={update('energy_consumption')}
-              error={errors.energy_consumption}
-            />
-          </View>
-          <View style={styles.column}>
-            <TextField
-              label="Battery size (kWh)"
-              placeholder="e.g. 75"
-              keyboardType="decimal-pad"
-              value={form.battery_capacity}
-              onChangeText={update('battery_capacity')}
-              error={errors.battery_capacity}
-            />
-          </View>
-        </View>
-      )}
-
-      {formError && (
-        <ThemedText type="small" themeColor="danger">
-          {formError}
-        </ThemedText>
-      )}
-
-      <PrimaryButton
-        label="Save vehicle"
-        onPress={handleSave}
-        loading={saving}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   message: {
     gap: Spacing.two,
@@ -470,11 +252,6 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderWidth: 1,
     borderRadius: 14,
-  },
-
-  optionEmoji: {
-    fontSize: 30,
-    lineHeight: 38,
   },
 
   optionText: {
@@ -508,34 +285,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  form: {
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderWidth: 1,
-    borderRadius: 14,
-  },
-
-  formHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  formTitle: {
-    fontSize: 16,
-  },
-
-  row: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.three,
-  },
-
-  column: {
-    flexGrow: 1,
-    flexBasis: 200,
   },
 
   pressed: {

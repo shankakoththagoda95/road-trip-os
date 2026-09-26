@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
@@ -27,6 +27,11 @@ from app.services.trip_route import (
     calculate_trip_route_tolls,
     calculate_trip_travel_checklist,
 )
+from app.models.itinerary import Itinerary
+from app.models.itinerary_day import ItineraryDay
+from app.models.trip_budget import TripBudget
+from app.models.trip_checklist_item import TripChecklistItem
+from app.models.trip_ev import TripEV
 from app.models.trip_fuel import TripFuel
 from app.models.user_settings import UserSettings
 from app.models.trip_location import TripLocation
@@ -74,6 +79,7 @@ def create_trip(
         departure_at=trip_data.departure_at,
         travelers=trip_data.travelers,
         duration_days=trip_data.duration_days,
+        destination_nights=trip_data.destination_nights,
         vehicle_id=trip_data.vehicle_id,
         max_driving_hours_per_day=trip_data.max_driving_hours_per_day,
         max_distance_per_day=trip_data.max_distance_per_day,
@@ -269,6 +275,7 @@ def update_trip(
     trip.departure_at = trip_data.departure_at
     trip.travelers = trip_data.travelers
     trip.duration_days = trip_data.duration_days
+    trip.destination_nights = trip_data.destination_nights
     trip.max_driving_hours_per_day = trip_data.max_driving_hours_per_day
     trip.max_distance_per_day = trip_data.max_distance_per_day
     trip.vehicle_id = trip_data.vehicle_id
@@ -297,6 +304,25 @@ def delete_trip(
             status_code=404,
             detail="Trip not found",
         )
+
+    # No ON DELETE CASCADE in the schema: remove the trip's own rows first,
+    # or the foreign keys block the delete.
+    itinerary_ids = select(Itinerary.id).where(Itinerary.trip_id == trip.id)
+
+    db.execute(
+        delete(ItineraryDay).where(ItineraryDay.itinerary_id.in_(itinerary_ids))
+    )
+
+    for model in (
+        Itinerary,
+        TripDestination,
+        TripBudget,
+        TripChecklistItem,
+        TripFuel,
+        TripEV,
+        TripLocation,
+    ):
+        db.execute(delete(model).where(model.trip_id == trip.id))
 
     db.delete(trip)
     db.commit()
@@ -613,6 +639,8 @@ def calculate_trip_route_endpoint(
             for day in days
         ],
         "geometry": route.get("geometry"),
+        "points": route_details.get("points", []),
+        "problems": route_details.get("problems", []),
     }
 
 

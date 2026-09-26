@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
+from app.models.trip import Trip
 from app.models.user import User
 from app.models.vehicle import Vehicle
 from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
@@ -26,6 +27,8 @@ def create_vehicle(
     new_vehicle = Vehicle(
         user_id=current_user.id,
         name=vehicle_data.name,
+        brand=vehicle_data.brand,
+        model=vehicle_data.model,
         vehicle_type=vehicle_data.vehicle_type,
         fuel_type=vehicle_data.fuel_type,
         fuel_consumption=vehicle_data.fuel_consumption,
@@ -98,6 +101,8 @@ def update_vehicle(
         )
 
     vehicle.name = vehicle_data.name
+    vehicle.brand = vehicle_data.brand
+    vehicle.model = vehicle_data.model
     vehicle.vehicle_type = vehicle_data.vehicle_type
     vehicle.fuel_type = vehicle_data.fuel_type
     vehicle.fuel_consumption = vehicle_data.fuel_consumption
@@ -177,7 +182,18 @@ def delete_vehicle(
             detail="Vehicle not found",
         )
 
+    # Trips keep their data but no longer have a vehicle; otherwise the
+    # foreign key on trips.vehicle_id blocks the delete.
+    detached = db.execute(
+        update(Trip)
+        .where(Trip.vehicle_id == vehicle.id)
+        .values(vehicle_id=None)
+    ).rowcount
+
     db.delete(vehicle)
     db.commit()
 
-    return {"message": "Vehicle deleted successfully"}
+    return {
+        "message": "Vehicle deleted successfully",
+        "trips_updated": detached,
+    }

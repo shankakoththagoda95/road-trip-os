@@ -1,6 +1,6 @@
 import { Link, type Href } from 'expo-router';
 import type { PropsWithChildren } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
@@ -36,9 +36,12 @@ export function AuthScreen({
       backgroundImage={backgroundImage}
       overlayOpacity={0.55}
       maxWidth={480}>
-      <View style={styles.brand}>
-        <ThemedText style={styles.brandText}>🧭 Road-Trip OS</ThemedText>
-      </View>
+      {/* On web the top bar already shows the brand. */}
+      {Platform.OS !== 'web' && (
+        <View style={styles.brand}>
+          <ThemedText style={styles.brandText}>🧭 Road-Trip OS</ThemedText>
+        </View>
+      )}
 
       <View style={styles.header}>
         <ThemedText style={styles.title}>{title}</ThemedText>

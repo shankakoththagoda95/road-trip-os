@@ -12,6 +12,8 @@ export type RoutePointInput = {
   location: string;
   latitude?: number;
   longitude?: number;
+  // Nights spent here before driving on (ignored for the start).
+  nights?: number;
 };
 
 export type RoutePreviewRequest = {

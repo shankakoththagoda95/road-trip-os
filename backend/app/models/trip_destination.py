@@ -27,3 +27,6 @@ class TripDestination(Base):
     )
 
     stop_order: Mapped[int] = mapped_column(Integer)
+
+    # Nights spent here before driving on.
+    nights: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

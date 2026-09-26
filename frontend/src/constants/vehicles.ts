@@ -1,14 +1,24 @@
+import type { ImageSourcePropType } from 'react-native';
+
 import type { FuelType, Vehicle, VehicleType } from '@/api/vehicles';
+
+// Illustrations per vehicle type (assets/images/{car,van,camper-van,motorcycle}.png).
+export const VehicleTypeIcons: Record<VehicleType, ImageSourcePropType> = {
+  car: require('@/assets/images/brand/vehicle-types/car.png'),
+  van: require('@/assets/images/brand/vehicle-types/van.png'),
+  campervan: require('@/assets/images/brand/vehicle-types/campervan.png'),
+  motorcycle: require('@/assets/images/brand/vehicle-types/motorcycle.png'),
+};
 
 export const VehicleTypeOptions: readonly {
   value: VehicleType;
   label: string;
-  emoji: string;
+  image: ImageSourcePropType;
 }[] = [
-  { value: 'car', label: 'Car', emoji: '🚗' },
-  { value: 'van', label: 'Van', emoji: '🚐' },
-  { value: 'campervan', label: 'Campervan', emoji: '🚌' },
-  { value: 'motorcycle', label: 'Motorcycle', emoji: '🏍️' },
+  { value: 'car', label: 'Car', image: VehicleTypeIcons.car },
+  { value: 'van', label: 'Van', image: VehicleTypeIcons.van },
+  { value: 'campervan', label: 'Campervan', image: VehicleTypeIcons.campervan },
+  { value: 'motorcycle', label: 'Motorcycle', image: VehicleTypeIcons.motorcycle },
 ];
 
 export const FuelTypeOptions: readonly { value: FuelType; label: string }[] = [
@@ -19,8 +29,16 @@ export const FuelTypeOptions: readonly { value: FuelType; label: string }[] = [
   { value: 'electric', label: 'Electric' },
 ];
 
-export function vehicleEmoji(type: string) {
-  return VehicleTypeOptions.find((option) => option.value === type)?.emoji ?? '🚗';
+// e.g. "Volvo XC90", or null when neither is set.
+export function vehicleMakeModel(vehicle: {
+  brand?: string | null;
+  model?: string | null;
+}) {
+  return [vehicle.brand, vehicle.model].filter(Boolean).join(' ') || null;
+}
+
+export function vehicleTypeIcon(type: string) {
+  return VehicleTypeIcons[type as VehicleType] ?? VehicleTypeIcons.car;
 }
 
 export function fuelTypeLabel(type: string) {

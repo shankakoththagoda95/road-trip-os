@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.schemas.trip import MAX_STAY_NIGHTS
 
 
 class TripDestinationCreate(BaseModel):
@@ -6,6 +8,8 @@ class TripDestinationCreate(BaseModel):
     stop_order: int | None = None
     latitude: float | None = None
     longitude: float | None = None
+    # Nights spent here before driving on.
+    nights: int = Field(default=0, ge=0, le=MAX_STAY_NIGHTS)
 
 
 class TripDestinationUpdate(BaseModel):
@@ -13,6 +17,7 @@ class TripDestinationUpdate(BaseModel):
     stop_order: int
     latitude: float | None = None
     longitude: float | None = None
+    nights: int = Field(default=0, ge=0, le=MAX_STAY_NIGHTS)
 
 
 class TripDestinationResponse(BaseModel):
@@ -22,3 +27,4 @@ class TripDestinationResponse(BaseModel):
     stop_order: int
     latitude: float | None
     longitude: float | None
+    nights: int

@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, Ref } from 'react';
 import {
   ImageBackground,
   type ImageSourcePropType,
@@ -12,16 +12,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, Spacing } from '@/constants/theme';
 
-// Height reserved for the floating web tab bar (see app-tabs.web.tsx).
-const WebTabBarInset = 88;
-
 type ScreenProps = PropsWithChildren<{
   maxWidth?: number;
   backgroundImage?: ImageSourcePropType;
   overlayOpacity?: number;
-  // Screens inside the tab navigator need room for the tab bar
-  // (floating at the top on web, at the bottom on native).
+  // Screens inside the tab navigator need room for the native bottom tab
+  // bar. (On web the sidebar sits beside the page instead.)
   hasTabBar?: boolean;
+  // For pages that scroll programmatically (e.g. "jump to section").
+  scrollRef?: Ref<ScrollView>;
+  // Use the whole width (no max width) and start right under the header.
+  fullWidth?: boolean;
 }>;
 
 /**
@@ -33,13 +34,15 @@ export function Screen({
   backgroundImage,
   overlayOpacity = 0.5,
   hasTabBar = false,
+  scrollRef,
+  fullWidth = false,
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
 
   const paddingTop =
     Platform.OS === 'web'
-      ? hasTabBar
-        ? WebTabBarInset
+      ? fullWidth
+        ? Spacing.two
         : Spacing.five
       : insets.top + Spacing.three;
   const paddingBottom =
@@ -47,10 +50,13 @@ export function Screen({
 
   const content = (
     <ScrollView
+      ref={scrollRef}
       style={styles.scroll}
       contentContainerStyle={{ paddingTop, paddingBottom }}
       keyboardShouldPersistTaps="handled">
-      <View style={[styles.content, { maxWidth }]}>{children}</View>
+      <View style={[styles.content, !fullWidth && { maxWidth }]}>
+        {children}
+      </View>
     </ScrollView>
   );
 

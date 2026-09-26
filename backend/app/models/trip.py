@@ -36,6 +36,12 @@ class Trip(Base):
 
     duration_days: Mapped[int] = mapped_column(Integer)
 
+    # Nights at the destination (the last stop) before the trip ends or,
+    # on a round trip, before driving home.
+    destination_nights: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
+
     max_driving_hours_per_day: Mapped[float | None] = mapped_column(
         Float,
         nullable=True,

@@ -59,3 +59,40 @@ def create_trip_ev(
     db.refresh(new_ev)
 
     return new_ev
+
+
+@router.get("/", response_model=TripEVResponse)
+def get_trip_ev(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    The battery level the trip started with.
+    """
+    trip = db.scalar(
+        select(Trip).where(
+            Trip.id == trip_id,
+            Trip.user_id == current_user.id,
+        )
+    )
+
+    if trip is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Trip not found",
+        )
+
+    record = db.scalar(
+        select(TripEV).where(
+            TripEV.trip_id == trip_id,
+        )
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No battery data for this trip",
+        )
+
+    return record

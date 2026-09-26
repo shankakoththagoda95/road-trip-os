@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.trip import TripType
+from app.schemas.trip import MAX_STAY_NIGHTS, TripType
 from app.services.route_constraints import (
     DistanceStatus,
     DrivingTimeStatus,
@@ -23,6 +23,19 @@ class RouteGeometry(BaseModel):
 
     type: Literal["LineString"] = "LineString"
     coordinates: list[list[float]]
+
+
+class RoutePointKind(str, Enum):
+    START = "start"
+    STOP = "stop"
+    DESTINATION = "destination"
+
+
+class RoutePoint(BaseModel):
+    location: str
+    latitude: float
+    longitude: float
+    kind: RoutePointKind
 
 
 class TripRouteLegResponse(BaseModel):
@@ -49,6 +62,10 @@ class TripRouteResponse(BaseModel):
     legs: list[TripRouteLegResponse]
     days: list[DrivingDayResponse]
     geometry: RouteGeometry | None = None
+    # Map markers: start, stops, destination.
+    points: list[RoutePoint] = []
+    # Why the days couldn't be planned (e.g. a leg over the daily limit).
+    problems: list[str] = []
 
 
 class GeocodeRequest(BaseModel):
@@ -76,6 +93,8 @@ class RoutePointInput(BaseModel):
     )
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
+    # Nights spent here before driving on (ignored for the start).
+    nights: int = Field(default=0, ge=0, le=MAX_STAY_NIGHTS)
 
 
 class RoutePreviewRequest(BaseModel):
@@ -84,19 +103,6 @@ class RoutePreviewRequest(BaseModel):
     stops: list[RoutePointInput] = Field(default_factory=list)
     trip_type: TripType = TripType.ONE_WAY
     preference: RoutePreference = RoutePreference.FASTEST
-
-
-class RoutePointKind(str, Enum):
-    START = "start"
-    STOP = "stop"
-    DESTINATION = "destination"
-
-
-class RoutePoint(BaseModel):
-    location: str
-    latitude: float
-    longitude: float
-    kind: RoutePointKind
 
 
 class RoutePreviewLeg(BaseModel):

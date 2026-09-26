@@ -7,10 +7,9 @@ from app.services.route_builder import (
     calculate_trip_route,
     resolve_location,
 )
-from app.services.route_constraints import (
-    check_distance_limit,
-    split_route_into_days,
-)
+from app.services.itinerary import saved_stay_nights, schedule_driving_days
+from app.services.itinerary_preview import legs_over_limit
+from app.services.route_constraints import check_distance_limit
 from app.services.borders import (
     BorderCalculation,
     BorderProvider,
@@ -84,17 +83,57 @@ def calculate_trip_route_details(
         for index, leg in enumerate(route["legs"])
     ]
 
-    days = split_route_into_days(
-        legs,
-        trip.max_distance_per_day,
-        trip.max_driving_hours_per_day,
-    )
+    # Same scheduling as the planner: round trips drive home at the end.
+    # A leg longer than a day's limit can't be split (days end at stops),
+    # so report it instead of failing the whole route.
+    try:
+        days, problems = schedule_driving_days(
+            legs,
+            trip.trip_type,
+            trip.duration_days,
+            trip.max_distance_per_day,
+            trip.max_driving_hours_per_day,
+            stay_nights=saved_stay_nights(trip, destinations),
+        )
+    except ValueError:
+        days = []
+        problems = legs_over_limit(
+            legs,
+            trip.max_distance_per_day,
+            trip.max_driving_hours_per_day,
+        )
+
+    points = [
+        {
+            "location": trip.start_location,
+            "latitude": start_coordinates[0],
+            "longitude": start_coordinates[1],
+            "kind": "start",
+        },
+        *[
+            {
+                "location": destination.location,
+                "latitude": destination.latitude,
+                "longitude": destination.longitude,
+                "kind": "stop",
+            }
+            for destination in destinations
+        ],
+        {
+            "location": trip.destination,
+            "latitude": destination_coordinates[0],
+            "longitude": destination_coordinates[1],
+            "kind": "destination",
+        },
+    ]
 
     return {
         "route": route,
         "locations": locations,
         "legs": legs,
         "days": days,
+        "points": points,
+        "problems": problems,
     }
 
 

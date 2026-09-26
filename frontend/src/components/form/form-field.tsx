@@ -50,6 +50,15 @@ export function inputStyle(colors: ThemeColors, hasError = false) {
   };
 }
 
+// The shared input style sets paddingHorizontal, which beats paddingLeft /
+// paddingRight on web; drop it so an icon can sit inside the field.
+export function withoutSidePadding<T extends { paddingHorizontal?: unknown }>(
+  style: T,
+) {
+  const { paddingHorizontal: _unused, ...rest } = style;
+  return rest;
+}
+
 type TextFieldProps = Omit<TextInputProps, 'style'> & {
   label: string;
   error?: string;

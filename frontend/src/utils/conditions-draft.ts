@@ -2,6 +2,7 @@ import type { RouteConditionsRequest } from '@/api/routes';
 import type { TripDraft } from '@/hooks/use-trip-draft';
 import { toLocalDateTimeString } from '@/utils/dates';
 import { buildPreviewRequest } from '@/utils/route-draft';
+import { withStayNights } from '@/utils/stays';
 
 /**
  * The weather & terrain request for the current draft, or null until the
@@ -18,7 +19,8 @@ export function buildConditionsRequest(
   }
 
   return {
-    ...route,
+    // Stays decide which day each place is reached.
+    ...withStayNights(route, details),
     departure_at: toLocalDateTimeString(
       details.departureDate,
       details.departureTime,

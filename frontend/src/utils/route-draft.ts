@@ -1,43 +1,75 @@
 import type { RoutePointInput, RoutePreviewRequest } from '@/api/routes';
-import type { RoutePlace, TripDraft } from '@/hooks/use-trip-draft';
+import type {
+  RoutePlace,
+  TripDetailsDraft,
+  TripDraft,
+} from '@/hooks/use-trip-draft';
+import { placeKey } from '@/utils/place-key';
 
 /**
- * A geocoded place is only valid while it still matches the text the user
- * entered (they may have edited Trip Details since).
+ * Start, stops in between, and destination (the last stop), as typed.
+ * Empty stop fields are ignored.
  */
-export function placeMatches(place: RoutePlace | null, text: string) {
-  return place !== null && place.location === text.trim();
+export function routeParts(details: TripDetailsDraft) {
+  const stops = details.stops.map((stop) => stop.trim()).filter(Boolean);
+
+  return {
+    start: details.startLocation.trim(),
+    via: stops.slice(0, -1),
+    destination: stops.at(-1) ?? '',
+    stops,
+  };
 }
 
-function toPointInput(place: RoutePlace): RoutePointInput {
+export function placeFor(draft: TripDraft, text: string): RoutePlace | null {
+  return draft.route.places[placeKey(text)] ?? null;
+}
+
+/**
+ * The first typed location that still needs looking up, or null.
+ */
+export function nextPlaceToFind(draft: TripDraft) {
+  const { start, stops } = routeParts(draft.details);
+
+  return (
+    [start, ...stops].find((text) => text && !placeFor(draft, text)) ?? null
+  );
+}
+
+function toPointInput(place: RoutePlace, typed: string): RoutePointInput {
   return {
-    location: place.location,
+    location: typed,
     latitude: place.latitude,
     longitude: place.longitude,
   };
 }
 
 /**
- * The preview request for the current draft, or null while the start or
- * destination still needs geocoding.
+ * The preview request for the current draft, or null while any location
+ * still needs looking up.
  */
 export function buildPreviewRequest(
   draft: TripDraft,
 ): RoutePreviewRequest | null {
-  const { details, route } = draft;
+  const { start, via, destination } = routeParts(draft.details);
 
-  if (
-    !placeMatches(route.start, details.startLocation) ||
-    !placeMatches(route.destination, details.destination)
-  ) {
+  if (!start || !destination) {
+    return null;
+  }
+
+  const startPlace = placeFor(draft, start);
+  const destinationPlace = placeFor(draft, destination);
+  const viaPlaces = via.map((text) => placeFor(draft, text));
+
+  if (!startPlace || !destinationPlace || viaPlaces.some((place) => !place)) {
     return null;
   }
 
   return {
-    start: toPointInput(route.start!),
-    destination: toPointInput(route.destination!),
-    stops: route.stops.map(toPointInput),
-    trip_type: details.tripType,
+    start: toPointInput(startPlace, start),
+    destination: toPointInput(destinationPlace, destination),
+    stops: via.map((text, index) => toPointInput(viaPlaces[index]!, text)),
+    trip_type: draft.details.tripType,
   };
 }
 

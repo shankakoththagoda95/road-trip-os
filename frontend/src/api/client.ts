@@ -44,7 +44,7 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 }
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
 };
 
@@ -88,6 +88,31 @@ export async function apiRequest<T>(
   }
 
   return data as T;
+}
+
+/**
+ * Fetch a file (e.g. a calendar export) with the user's credentials.
+ */
+export async function apiDownload(path: string): Promise<Blob> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${ApiBaseUrl}${path}`, {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      `Can't reach the server at ${ApiBaseUrl}. Is the API running?`,
+    );
+  }
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => undefined);
+    throw toApiError(response.status, data);
+  }
+
+  return response.blob();
 }
 
 type ValidationIssue = { loc?: (string | number)[]; msg?: string };

@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass
 import httpx
 
@@ -24,6 +25,38 @@ class FuelStationProvider:
 
 class OverpassFuelStationProvider(FuelStationProvider):
     OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+    # The public server is often briefly overloaded; one retry usually
+    # gets through.
+    ATTEMPTS = 2
+    RETRY_DELAY_SECONDS = 2.0
+    BUSY_STATUSES = {429, 502, 503, 504}
+
+    def _post(self, query: str) -> httpx.Response:
+        for attempt in range(1, self.ATTEMPTS + 1):
+            try:
+                # Overpass rejects requests without an identifying
+                # User-Agent (406).
+                response = httpx.post(
+                    self.OVERPASS_URL,
+                    data={"data": query},
+                    headers={
+                        "User-Agent": "Road-Trip-OS/1.0 (development project)",
+                    },
+                    timeout=30.0,
+                )
+            except httpx.TimeoutException:
+                if attempt == self.ATTEMPTS:
+                    raise
+            else:
+                if (
+                    response.status_code not in self.BUSY_STATUSES
+                    or attempt == self.ATTEMPTS
+                ):
+                    return response
+
+            time.sleep(self.RETRY_DELAY_SECONDS)
+
+        raise AssertionError("unreachable")
 
     def search_nearby(
         self,
@@ -52,16 +85,7 @@ class OverpassFuelStationProvider(FuelStationProvider):
         out center;
         """
 
-        # Overpass rejects requests without an identifying User-Agent (406).
-        response = httpx.post(
-            self.OVERPASS_URL,
-            data={"data": query},
-            headers={
-                "User-Agent": "Road-Trip-OS/1.0 (development project)",
-            },
-            timeout=30.0,
-        )
-
+        response = self._post(query)
         response.raise_for_status()
 
         data = response.json()

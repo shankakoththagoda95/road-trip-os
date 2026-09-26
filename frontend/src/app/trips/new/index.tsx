@@ -21,6 +21,9 @@ const backgroundImage = require('@/assets/images/back.jpeg');
 // Below this width step cards use a smaller thumbnail and drop the arrow.
 const CompactBreakpoint = 640;
 
+// Background behind the step icons (see assets/images/step-icons).
+const IconTileColor = '#EEF3FB';
+
 export default function NewTripScreen() {
   const router = useRouter();
   const colors = useTheme();
@@ -189,7 +192,12 @@ function TripStepCard({
         style={[
           styles.thumbnail,
           compact && styles.thumbnailCompact,
-          { backgroundColor: colors.backgroundSelected },
+          {
+            // Icons are dark blue: keep a light tile in both themes.
+            backgroundColor: step.image
+              ? IconTileColor
+              : colors.backgroundSelected,
+          },
         ]}>
         {step.image ? (
           <Image
@@ -319,12 +327,13 @@ const styles = StyleSheet.create({
   },
 
   thumbnail: {
-    width: 120,
-    height: 80,
-    borderRadius: 12,
+    width: 88,
+    height: 88,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    padding: Spacing.one,
   },
 
   thumbnailCompact: {

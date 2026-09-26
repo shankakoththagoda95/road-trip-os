@@ -1,8 +1,11 @@
+import logging
 import os
 
+import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.api.v1.auth import router as auth_router
@@ -11,6 +14,8 @@ from app.api.v1.vehicles import router as vehicles_router
 from app.core.database import engine
 from app.api.v1.trips import router as trips_router
 from app.api.v1.trip_destinations import router as trip_destinations_router
+from app.api.v1.trip_checklist import router as trip_checklist_router
+from app.api.v1.stations import router as stations_router
 from app.api.v1.itineraries import router as itineraries_router
 from app.api.v1.trip_fuel import router as trip_fuel_router
 from app.api.v1.user_settings import router as user_settings_router
@@ -24,6 +29,7 @@ from app.api.v1.weather import router as weather_router
 from app.api.v1.elevation import router as elevation_router
 from app.api.v1.routes import router as routes_router
 from app.api.v1.checklists import router as checklists_router
+from app.api.v1.places import router as places_router
 
 
 load_dotenv()
@@ -41,6 +47,32 @@ CORS_ORIGINS = [
 
 
 app = FastAPI()
+
+@app.exception_handler(httpx.HTTPError)
+async def external_service_error(request: Request, error: httpx.HTTPError):
+    """
+    Routing, geocoding, weather and station lookups call public services
+    that are sometimes down or rate-limited. Report that clearly (502)
+    instead of a generic 500.
+    """
+
+    logging.getLogger("uvicorn.error").warning(
+        "External service error on %s %s: %s",
+        request.method,
+        request.url.path,
+        error,
+    )
+
+    return JSONResponse(
+        status_code=502,
+        content={
+            "detail": (
+                "A map or routing service is unavailable right now. "
+                "Try again shortly."
+            ),
+        },
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,6 +99,9 @@ app.include_router(weather_router)
 app.include_router(elevation_router)
 app.include_router(routes_router)
 app.include_router(checklists_router)
+app.include_router(trip_checklist_router)
+app.include_router(stations_router)
+app.include_router(places_router)
 
 
 @app.get("/")

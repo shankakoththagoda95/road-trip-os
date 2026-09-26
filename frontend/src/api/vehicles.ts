@@ -11,6 +11,9 @@ export type FuelType =
 
 export type VehicleCreate = {
   name: string;
+  // Optional make and model, e.g. "Volvo" / "XC90".
+  brand?: string | null;
+  model?: string | null;
   vehicle_type: VehicleType;
   fuel_type: FuelType;
   // Litres per 100 km.
@@ -34,4 +37,22 @@ export function listVehicles() {
 
 export function createVehicle(data: VehicleCreate) {
   return apiRequest<Vehicle>('/vehicles/', { method: 'POST', body: data });
+}
+
+export function getVehicle(vehicleId: number) {
+  return apiRequest<Vehicle>(`/vehicles/${vehicleId}`);
+}
+
+export function updateVehicle(vehicleId: number, data: VehicleCreate) {
+  return apiRequest<Vehicle>(`/vehicles/${vehicleId}`, {
+    method: 'PUT',
+    body: data,
+  });
+}
+
+export function deleteVehicle(vehicleId: number) {
+  return apiRequest<{ message: string; trips_updated: number }>(
+    `/vehicles/${vehicleId}`,
+    { method: 'DELETE' },
+  );
 }

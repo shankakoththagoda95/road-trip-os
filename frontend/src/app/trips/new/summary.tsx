@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ApiError, errorMessage } from '@/api/client';
+import { addTripChecklistItems } from '@/api/trip-checklist';
 import {
   addTripDestination,
   createTrip,
@@ -15,7 +16,7 @@ import { WizardStepScreen } from '@/components/new-trip/wizard-step-screen';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { fuelTypeLabel, vehicleEmoji } from '@/constants/vehicles';
+import { fuelTypeLabel } from '@/constants/vehicles';
 import { useTheme } from '@/hooks/use-theme';
 import { useTripDraft } from '@/hooks/use-trip-draft';
 import {
@@ -25,12 +26,18 @@ import {
 } from '@/utils/dates';
 import { estimateBudget } from '@/utils/budget';
 import { currentConditions } from '@/utils/conditions-draft';
+import { validateDetails } from '@/utils/details-validation';
 import { currentEnergyPlan, energyMode } from '@/utils/energy-draft';
 import { currentChecklist } from '@/utils/checklist-draft';
 import { currentFees } from '@/utils/fees-draft';
 import { currentItinerary } from '@/utils/itinerary-draft';
 import { formatMoney } from '@/utils/numbers';
-import { currentRoutePreview } from '@/utils/route-draft';
+import {
+  currentRoutePreview,
+  placeFor,
+  routeParts,
+} from '@/utils/route-draft';
+import { nightsAt } from '@/utils/stays';
 import { formatDistance, formatDuration } from '@/utils/units';
 
 export default function TripSummaryScreen() {
@@ -39,14 +46,24 @@ export default function TripSummaryScreen() {
   const { draft, completedSteps, forgetSavedDraft, reset } = useTripDraft();
   const details = draft.details;
 
-  const detailsComplete = completedSteps.has('details');
+  // Checked on the details themselves, so it doesn't matter how the user
+  // got here (Next, the step bar, or a restored draft).
+  const detailProblems = Object.values(validateDetails(details));
+  const detailsComplete = detailProblems.length === 0;
   const departureAt = toLocalDateTimeString(
     details.departureDate,
     details.departureTime,
   );
 
   const { vehicle, preferences } = draft;
-  const stops = draft.route.stops;
+  // The last stop is the trip's destination; the others are saved as stops
+  // in between (with coordinates when the Route step has looked them up).
+  const { start, via, destination, stops } = routeParts(details);
+  const routeLine = [
+    start,
+    ...stops,
+    ...(details.tripType === 'round_trip' ? [start] : []),
+  ].join(' → ');
   const routePreview = currentRoutePreview(draft);
   const budget = estimateBudget(draft);
   const energyPlan = currentEnergyPlan(draft);
@@ -56,10 +73,12 @@ export default function TripSummaryScreen() {
   const itinerary = currentItinerary(draft);
   // Only a plan that fits the daily limits can be saved.
   const saveItinerary = itinerary !== null && itinerary.days.length > 0;
-  const requiredItems = (checklist ?? []).filter((item) => item.required);
-  const requiredReady = requiredItems.filter((item) =>
-    draft.checkedItems.includes(item.id),
-  ).length;
+  const requiredCount = (checklist ?? []).filter((item) => item.required).length;
+  const { personalChecklist } = draft;
+  // e.g. "Hallstatt (2 nights)".
+  const stays = stops
+    .filter((text) => nightsAt(details, text) > 0)
+    .map((text) => `${text} (${pluralize(nightsAt(details, text), 'night', 'nights')})`);
   const { energy } = draft;
   // Only save a starting level the user actually reviewed.
   const saveEnergy = vehicle !== null && completedSteps.has('energy');
@@ -86,12 +105,13 @@ export default function TripSummaryScreen() {
     try {
       const trip = await createTrip({
         name: details.name.trim(),
-        start_location: details.startLocation.trim(),
-        destination: details.destination.trim(),
+        start_location: start,
+        destination,
         trip_type: details.tripType,
         departure_at: departureAt,
         travelers: details.travelers,
         duration_days: details.durationDays,
+        destination_nights: nightsAt(details, destination),
         vehicle_id: vehicle?.id ?? null,
         max_driving_hours_per_day: preferences.limitDrivingHours
           ? preferences.maxDrivingHours
@@ -117,12 +137,16 @@ export default function TripSummaryScreen() {
 
     try {
       // Sequential so stops keep their order.
-      for (const [index, stop] of stops.entries()) {
+      for (const [index, text] of via.entries()) {
+        const place = placeFor(draft, text);
+
+        // Without coordinates the backend looks the place up itself.
         await addTripDestination(tripId, {
-          location: stop.location,
+          location: text,
           stop_order: index + 1,
-          latitude: stop.latitude,
-          longitude: stop.longitude,
+          latitude: place?.latitude ?? null,
+          longitude: place?.longitude ?? null,
+          nights: nightsAt(details, text),
         });
       }
 
@@ -158,6 +182,24 @@ export default function TripSummaryScreen() {
           );
         }
       }
+
+      // Saved with the trip so it can be ticked off while travelling.
+      const checklistItems = [
+        ...(checklist ?? []).map((item) => ({
+          name: item.name,
+          description: item.description,
+          category: item.category,
+          required: item.required,
+          personal: false,
+        })),
+        ...personalChecklist.map((name) => ({ name, personal: true })),
+      ];
+
+      if (checklistItems.length > 0) {
+        savingPart = 'checklist';
+
+        await addTripChecklistItems(tripId, checklistItems);
+      }
     } catch (error) {
       setTripSaved(true);
       setSubmitError(
@@ -178,19 +220,25 @@ export default function TripSummaryScreen() {
       onContinue={handleCreate}
       continueLabel={tripSaved ? 'View my trips' : '🚗 Create trip'}
       continueLoading={submitting}
-      continueDisabled={!detailsComplete}>
+      continueDisabled={!detailsComplete}
+      summary={
+        detailsComplete ? undefined : (
+          <ThemedText type="small" themeColor="danger">
+            Can&apos;t create the trip yet: fix{' '}
+            {detailProblems.length === 1
+              ? 'one thing'
+              : `${detailProblems.length} things`}{' '}
+            in Trip Details (listed at the top).
+          </ThemedText>
+        )
+      }>
       {detailsComplete ? (
         <>
           <SectionHeader title="Trip Details" editHref="/trips/new/details" />
 
           <View style={styles.rows}>
             <SummaryRow label="Name" value={details.name} />
-            <SummaryRow
-              label="Route"
-              value={`${details.startLocation} ${
-                details.tripType === 'round_trip' ? '⇄' : '→'
-              } ${details.destination}`}
-            />
+            <SummaryRow label="Route" value={routeLine} />
             <SummaryRow
               label="Trip type"
               value={
@@ -209,11 +257,15 @@ export default function TripSummaryScreen() {
           </View>
         </>
       ) : (
-        <View style={styles.notice}>
-          <ThemedText type="smallBold">Trip Details are missing</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Add a name, route and departure date before creating the trip.
+        <View style={styles.notice} accessibilityRole="alert">
+          <ThemedText type="smallBold">
+            Finish Trip Details to create your trip
           </ThemedText>
+          {detailProblems.map((problem) => (
+            <ThemedText key={problem} type="small" themeColor="danger">
+              • {problem}
+            </ThemedText>
+          ))}
           <Link href="/trips/new/details">
             <ThemedText type="linkPrimary">Go to Trip Details →</ThemedText>
           </Link>
@@ -228,14 +280,15 @@ export default function TripSummaryScreen() {
       />
 
       <View style={styles.rows}>
+        <SummaryRow label="Stops" value={stops.join(', ')} />
         <SummaryRow
-          label="Stops"
-          value={
-            stops.length > 0
-              ? stops.map((stop) => stop.location).join(', ')
-              : 'None'
-          }
-          muted={stops.length === 0}
+          label="Stays"
+          value={stays.length > 0 ? stays.join(', ') : 'No nights planned'}
+          muted={stays.length === 0}
+        />
+        <SummaryRow
+          label={details.tripType === 'round_trip' ? 'Finish' : 'Final stop'}
+          value={details.tripType === 'round_trip' ? `Back in ${start}` : destination}
         />
         <SummaryRow
           label="Distance"
@@ -265,7 +318,7 @@ export default function TripSummaryScreen() {
         label="Vehicle"
         value={
           vehicle
-            ? `${vehicleEmoji(vehicle.vehicle_type)} ${vehicle.name} (${fuelTypeLabel(vehicle.fuel_type)})`
+            ? `${vehicle.name} (${fuelTypeLabel(vehicle.fuel_type)})`
             : 'Not selected'
         }
         muted={!vehicle}
@@ -416,13 +469,19 @@ export default function TripSummaryScreen() {
 
       {checklist ? (
         <SummaryRow
-          label="Required items ready"
-          value={`${requiredReady} of ${requiredItems.length}`}
-          muted={requiredReady < requiredItems.length}
+          label="Checklist"
+          value={`${requiredCount} required, ${checklist.length - requiredCount} recommended`}
         />
       ) : (
         <SummaryRow label="Checklist" value="Not generated yet" muted />
       )}
+      <SummaryRow
+        label="Personal items"
+        value={
+          personalChecklist.length > 0 ? String(personalChecklist.length) : 'None added'
+        }
+        muted={personalChecklist.length === 0}
+      />
 
       <View style={[styles.divider, { backgroundColor: colors.border }]} />
 

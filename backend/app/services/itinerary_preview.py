@@ -56,6 +56,7 @@ def preview_itinerary(
     duration_days: int,
     max_distance_per_day: float | None,
     max_driving_hours_per_day: float | None,
+    stay_nights: list[int] | None = None,
 ) -> dict:
     """
     Day-by-day plan for a route preview (see services/route_preview.py):
@@ -84,6 +85,7 @@ def preview_itinerary(
         duration_days,
         max_distance_per_day,
         max_driving_hours_per_day,
+        stay_nights=stay_nights,
     )
     by_number = {day.day_number: day for day in driving}
     last_day = max(duration_days, max(by_number, default=1))

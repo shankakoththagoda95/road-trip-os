@@ -40,7 +40,7 @@ from app.services.itinerary_preview import preview_itinerary
 from app.services.road_fees import HEAVY_VEHICLE_NOTE, calculate_road_fees
 from app.services.route_conditions import build_route_conditions
 from app.services.route_countries import country_stretches, throttled
-from app.services.route_preview import preview_route
+from app.services.route_preview import preview_route, stay_nights
 
 
 router = APIRouter(
@@ -287,6 +287,7 @@ def conditions(
         weather_provider=OpenMeteoWeatherProvider(),
         elevation_provider=OpenMeteoElevationProvider(),
         today=date.today(),
+        stay_nights=stay_nights(request),
     )
 
 
@@ -410,4 +411,5 @@ def itinerary(
         duration_days=request.duration_days,
         max_distance_per_day=request.max_distance_per_day,
         max_driving_hours_per_day=request.max_driving_hours_per_day,
+        stay_nights=stay_nights(request),
     )

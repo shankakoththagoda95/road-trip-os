@@ -9,6 +9,8 @@ type PrimaryButtonProps = {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
+  // Red, for destructive actions like deleting.
+  danger?: boolean;
 };
 
 export function PrimaryButton({
@@ -16,6 +18,7 @@ export function PrimaryButton({
   onPress,
   loading = false,
   disabled = false,
+  danger = false,
 }: PrimaryButtonProps) {
   const colors = useTheme();
   const inactive = disabled || loading;
@@ -29,7 +32,7 @@ export function PrimaryButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: colors.primary },
+        { backgroundColor: danger ? colors.danger : colors.primary },
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}>

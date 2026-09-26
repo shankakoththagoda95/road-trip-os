@@ -18,6 +18,11 @@ class Vehicle(Base):
 
     name: Mapped[str] = mapped_column(String(100))
 
+    # Optional make and model, e.g. "Volvo" / "XC90".
+    brand: Mapped[str | None] = mapped_column(String(60), nullable=True)
+
+    model: Mapped[str | None] = mapped_column(String(60), nullable=True)
+
     vehicle_type: Mapped[str] = mapped_column(String(50))
 
     fuel_type: Mapped[str] = mapped_column(String(50))

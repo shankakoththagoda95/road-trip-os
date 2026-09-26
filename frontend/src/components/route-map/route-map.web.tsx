@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 
 import type { LatLngTuple } from 'leaflet';
-import { useEffect } from 'react';
+import { Fragment, useEffect } from 'react';
 import {
   CircleMarker,
   MapContainer,
@@ -22,17 +22,27 @@ const DefaultZoom = 4;
 /**
  * Leaflet map with start / stop / destination markers and the route line.
  */
-export function RouteMap({ points, line, height = 320 }: RouteMapProps) {
+export function RouteMap({ points, line, height = 320, focus }: RouteMapProps) {
   const colors = useTheme();
 
-  const markerPositions = points.map(
-    (point): LatLngTuple => [point.latitude, point.longitude],
-  );
+  const markerPositions = points.map((point): LatLngTuple => [
+    point.latitude,
+    point.longitude,
+  ]);
   const linePositions = (line ?? []).map(
     ([longitude, latitude]): LatLngTuple => [latitude, longitude],
   );
-  const boundsPositions =
-    linePositions.length > 0 ? linePositions : markerPositions;
+  // The focus points if given; otherwise the route (or its markers),
+  // plus the traveller wherever they are.
+  const boundsPositions: LatLngTuple[] =
+    focus && focus.length > 0
+      ? focus.map((point): LatLngTuple => [point.latitude, point.longitude])
+      : [
+          ...(linePositions.length > 0 ? linePositions : markerPositions),
+          ...points
+            .filter((point) => point.kind === 'current')
+            .map((point): LatLngTuple => [point.latitude, point.longitude]),
+        ];
 
   let stopNumber = 0;
 
@@ -72,6 +82,37 @@ export function RouteMap({ points, line, height = 320 }: RouteMapProps) {
               ? `${++stopNumber}. ${point.label}`
               : point.label;
 
+          // The traveller: a haloed dot with its label always shown.
+          if (point.kind === 'current') {
+            return (
+              <Fragment key={`current-${index}`}>
+                <CircleMarker
+                  center={[point.latitude, point.longitude]}
+                  radius={20}
+                  interactive={false}
+                  pathOptions={{
+                    stroke: false,
+                    fillColor: MarkerColors.current,
+                    fillOpacity: 0.22,
+                  }}
+                />
+                <CircleMarker
+                  center={[point.latitude, point.longitude]}
+                  radius={9}
+                  pathOptions={{
+                    color: '#FFFFFF',
+                    weight: 3,
+                    fillColor: MarkerColors.current,
+                    fillOpacity: 1,
+                  }}>
+                  <Tooltip direction="top" offset={[0, -10]} permanent>
+                    {label}
+                  </Tooltip>
+                </CircleMarker>
+              </Fragment>
+            );
+          }
+
           return (
             <CircleMarker
               key={`${point.kind}-${index}`}
@@ -83,8 +124,11 @@ export function RouteMap({ points, line, height = 320 }: RouteMapProps) {
                 fillColor: MarkerColors[point.kind],
                 fillOpacity: 1,
               }}>
-              <Tooltip direction="top" offset={[0, -8]}>
-                {label}
+              <Tooltip
+                direction="top"
+                offset={[0, -8]}
+                permanent={Boolean(point.permanentLabel)}>
+                {point.permanentLabel ?? label}
               </Tooltip>
             </CircleMarker>
           );
@@ -104,11 +148,23 @@ function FitBounds({ positions }: { positions: LatLngTuple[] }) {
   useEffect(() => {
     const latLngs: LatLngTuple[] = JSON.parse(key);
 
-    if (latLngs.length === 1) {
-      map.setView(latLngs[0], 10);
-    } else if (latLngs.length > 1) {
-      map.fitBounds(latLngs, { padding: [32, 32] });
+    function fit() {
+      // The container may have changed size since Leaflet measured it
+      // (e.g. inside a popup that animates open).
+      map.invalidateSize();
+
+      if (latLngs.length === 1) {
+        map.setView(latLngs[0], 10);
+      } else if (latLngs.length > 1) {
+        map.fitBounds(latLngs, { padding: [32, 32] });
+      }
     }
+
+    fit();
+    // Again once opening animations have finished.
+    const settled = setTimeout(fit, 350);
+
+    return () => clearTimeout(settled);
   }, [map, key]);
 
   return null;

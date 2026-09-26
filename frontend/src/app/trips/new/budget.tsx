@@ -1,20 +1,40 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useRouter } from 'expo-router';
-import type { PropsWithChildren } from 'react';
-import { StyleSheet, View } from 'react-native';
+import type { ComponentProps, PropsWithChildren, ReactNode } from 'react';
+import { ImageBackground, Pressable, StyleSheet, View } from 'react-native';
 
-import { ChipSelect } from '@/components/form/chip-select';
-import { FormField, TextField } from '@/components/form/form-field';
-import { WizardStepScreen } from '@/components/new-trip/wizard-step-screen';
+import { AmountStepper } from '@/components/form/amount-stepper';
+import { PlannerFrame } from '@/components/new-trip/planner-frame';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { getTripStep } from '@/constants/trip-steps';
 import { Spacing } from '@/constants/theme';
 import { usesBattery, usesFuel } from '@/constants/vehicles';
 import { useTheme } from '@/hooks/use-theme';
 import { type BudgetDraft, useTripDraft } from '@/hooks/use-trip-draft';
-import { type Currency, CurrencyOptions, estimateBudget } from '@/utils/budget';
+import {
+  type Currency,
+  CurrencyOptions,
+  estimateBudget,
+  typicalPrices,
+} from '@/utils/budget';
 import { pluralize } from '@/utils/dates';
-import { formatMoney } from '@/utils/numbers';
+import { formatMoney, parseNumber } from '@/utils/numbers';
+
+const panelImage = require('@/assets/images/brand/budget-panel.jpg');
+
+type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+// Icon colours per cost type.
+const Tints = {
+  currency: '#F59E0B',
+  fuel: '#EF4444',
+  charging: '#F59E0B',
+  food: '#A855F7',
+  tolls: '#10B981',
+  parking: '#3B82F6',
+  other: '#8B5CF6',
+  total: '#22C55E',
+} as const;
 
 export default function BudgetStepScreen() {
   const router = useRouter();
@@ -25,17 +45,19 @@ export default function BudgetStepScreen() {
 
   const estimate = estimateBudget(draft);
   const money = (amount: number) => formatMoney(amount, currency);
+  const symbol = currencySymbol(currency);
 
   // With no vehicle picked we can't know which applies; ask for fuel only.
   const showFuel = !vehicle || usesFuel(vehicle.fuel_type);
   const showCharging = vehicle !== null && usesBattery(vehicle.fuel_type);
 
-  function field(key: keyof BudgetDraft) {
+  const presets = typicalPrices(draft);
+  const canUseTypical = Object.keys(presets).length > 0;
+
+  function amountProps(key: keyof BudgetDraft) {
     return {
       value: budget[key],
-      onChangeText: (value: string) => updateBudget({ [key]: value }),
-      keyboardType: 'decimal-pad' as const,
-      placeholder: '0',
+      onChange: (value: string) => updateBudget({ [key]: value }),
     };
   }
 
@@ -46,205 +68,709 @@ export default function BudgetStepScreen() {
     router.navigate(next?.href ?? '/trips/new');
   }
 
+  const tripLength = `${pluralize(details.travelers, 'traveler', 'travelers')} × ${pluralize(details.durationDays, 'day', 'days')}`;
+  const fuelPrice = parseNumber(budget.fuelPricePerLiter);
+  const electricityPrice = parseNumber(budget.electricityPricePerKwh);
+  const foodPrice = parseNumber(budget.foodPerPersonPerDay);
+
+  // Rows for the breakdown panel, in the same order as the cards.
+  const breakdown: BreakdownRow[] = [
+    ...(showFuel
+      ? [
+          {
+            key: 'fuel',
+            icon: 'gas-station' as const,
+            tint: Tints.fuel,
+            label: 'Fuel',
+            detail:
+              estimate.fuel && fuelPrice !== null
+                ? `${Math.round(estimate.fuel.amount)} L × ${formatPrice(fuelPrice, currency)}`
+                : undefined,
+            amount: estimate.fuelCost,
+          },
+        ]
+      : []),
+    ...(showCharging
+      ? [
+          {
+            key: 'charging',
+            icon: 'ev-station' as const,
+            tint: Tints.charging,
+            label: 'Charging',
+            detail:
+              estimate.electricity && electricityPrice !== null
+                ? `${Math.round(estimate.electricity.amount)} kWh × ${formatPrice(electricityPrice, currency)}`
+                : undefined,
+            amount: estimate.evChargingCost,
+          },
+        ]
+      : []),
+    {
+      key: 'food',
+      icon: 'silverware-fork-knife',
+      tint: Tints.food,
+      label: 'Food',
+      detail:
+        foodPrice !== null ? `${tripLength} × ${money(foodPrice)}` : undefined,
+      amount: estimate.foodCost,
+    },
+    {
+      key: 'tolls',
+      icon: 'highway',
+      tint: Tints.tolls,
+      label: 'Tolls',
+      amount: estimate.tollCost,
+    },
+    {
+      key: 'parking',
+      icon: 'parking',
+      tint: Tints.parking,
+      label: 'Parking',
+      amount: estimate.parkingCost,
+    },
+    {
+      key: 'other',
+      icon: 'plus',
+      tint: Tints.other,
+      label: 'Other',
+      amount: estimate.otherCost,
+    },
+  ];
+
   return (
-    <WizardStepScreen stepId="budget" onContinue={handleContinue}>
-      <FormField label="Currency">
-        <ChipSelect
-          options={CurrencyOptions}
-          value={currency as Currency}
-          onChange={(value) => updateBudget({ currency: value })}
+    <PlannerFrame
+      stepId="budget"
+      onNext={handleContinue}
+      summary={
+        <TotalSummary
+          total={money(estimate.total)}
+          perPerson={
+            details.travelers > 1 && estimate.total > 0
+              ? money(estimate.total / details.travelers)
+              : null
+          }
         />
-      </FormField>
-
-      {showFuel && (
-        <CostSection emoji="⛽" title="Fuel">
-          {estimate.fuel ? (
-            <>
-              <ThemedText type="small" themeColor="textSecondary">
-                Your route needs about {Math.round(estimate.fuel.amount)} L
-                of fuel.
-              </ThemedText>
-              <TextField
-                label={`Fuel price (${currency} per litre)`}
-                {...field('fuelPricePerLiter')}
-                hint={
-                  estimate.fuel.unitPrice !== null
-                    ? `≈ ${money(estimate.fuel.cost)} for the trip`
-                    : undefined
-                }
-              />
-            </>
-          ) : (
-            <TextField
-              label={`Fuel cost (${currency})`}
-              {...field('fuelCost')}
-              hint="Pick a vehicle and plan your route to calculate this."
-            />
-          )}
-        </CostSection>
-      )}
-
-      {showCharging && (
-        <CostSection emoji="⚡" title="Charging">
-          {estimate.electricity ? (
-            <>
-              <ThemedText type="small" themeColor="textSecondary">
-                Your route needs about{' '}
-                {Math.round(estimate.electricity.amount)} kWh
-                {vehicle?.fuel_type === 'plug_in_hybrid'
-                  ? ' (assuming you use the full battery range first)'
-                  : ''}
-                .
-              </ThemedText>
-              <TextField
-                label={`Electricity price (${currency} per kWh)`}
-                {...field('electricityPricePerKwh')}
-                hint={
-                  estimate.electricity.unitPrice !== null
-                    ? `≈ ${money(estimate.electricity.cost)} for the trip`
-                    : undefined
-                }
-              />
-            </>
-          ) : (
-            <TextField
-              label={`Charging cost (${currency})`}
-              {...field('evChargingCost')}
-              hint="Plan your route to calculate this."
-            />
-          )}
-        </CostSection>
-      )}
-
-      <CostSection emoji="🍽️" title="Food">
-        <TextField
-          label={`Per person per day (${currency})`}
-          {...field('foodPerPersonPerDay')}
-          hint={`× ${pluralize(details.travelers, 'traveler', 'travelers')} × ${pluralize(details.durationDays, 'day', 'days')} = ${money(estimate.foodCost)}`}
+      }
+      aside={
+        <BreakdownPanel
+          rows={breakdown}
+          total={money(estimate.total)}
+          forWhom={`For ${pluralize(details.travelers, 'traveler', 'travelers')} • ${pluralize(details.durationDays, 'day', 'days')}`}
+          money={money}
         />
-      </CostSection>
-
-      <View style={styles.row}>
-        <View style={styles.column}>
-          <TextField
-            label={`🛣️ Tolls (${currency})`}
-            {...field('tollCost')}
-            hint="Road Fees & Borders estimates these for your route."
-          />
+      }>
+      <View
+        style={[
+          styles.tip,
+          { borderColor: colors.border, backgroundColor: colors.backgroundSelected },
+        ]}>
+        <IconTile icon="lightbulb-on-outline" tint={Tints.currency} size={40} />
+        <View style={styles.tipText}>
+          <ThemedText type="smallBold">Not sure about the costs?</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Fill the empty fields with typical European prices, then adjust
+            them to your trip.
+          </ThemedText>
         </View>
-        <View style={styles.column}>
-          <TextField
-            label={`🅿️ Parking (${currency})`}
-            {...field('parkingCost')}
+        <Pressable
+          accessibilityRole="button"
+          disabled={!canUseTypical}
+          onPress={() => updateBudget(presets)}
+          style={({ hovered, pressed }) => [
+            styles.tipButton,
+            { borderColor: colors.primary },
+            (hovered || pressed) && { backgroundColor: colors.backgroundElement },
+            !canUseTypical && styles.disabled,
+          ]}>
+          <ThemedText type="smallBold" style={{ color: colors.primary }}>
+            {canUseTypical ? 'Use typical prices' : 'All filled in'}
+          </ThemedText>
+        </Pressable>
+      </View>
+
+      <View style={styles.currency}>
+        <View style={styles.currencyHeader}>
+          <MaterialCommunityIcons
+            name="cash-multiple"
+            size={22}
+            color={Tints.currency}
           />
+          <ThemedText type="smallBold" style={styles.sectionTitle}>
+            Currency
+          </ThemedText>
+        </View>
+        <View style={styles.pills} accessibilityRole="radiogroup">
+          {CurrencyOptions.map((option) => {
+            const selected = option.value === (currency as Currency);
+
+            return (
+              <Pressable
+                key={option.value}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: selected }}
+                onPress={() => updateBudget({ currency: option.value })}
+                style={({ hovered }) => [
+                  styles.pill,
+                  {
+                    borderColor: selected ? colors.primary : colors.border,
+                    backgroundColor: selected
+                      ? colors.primary
+                      : colors.backgroundElement,
+                  },
+                  hovered && !selected && { backgroundColor: colors.backgroundSelected },
+                ]}>
+                <ThemedText
+                  type="smallBold"
+                  style={selected && { color: '#FFFFFF' }}>
+                  {option.label}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
-      <TextField
-        label={`➕ Other (${currency})`}
-        {...field('otherCost')}
-        hint="Accommodation, activities, ferries…"
-      />
-
-      <ThemedView type="backgroundSelected" style={styles.total}>
-        <View style={styles.totalHeader}>
-          <ThemedText type="smallBold">Estimated total</ThemedText>
-          <ThemedText style={styles.totalValue}>
-            {money(estimate.total)}
-          </ThemedText>
-        </View>
-
-        {details.travelers > 1 && estimate.total > 0 && (
-          <ThemedText type="small" themeColor="textSecondary">
-            ≈ {money(estimate.total / details.travelers)} per person
-          </ThemedText>
-        )}
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        {(
-          [
-            ['Fuel', estimate.fuelCost],
-            ['Charging', estimate.evChargingCost],
-            ['Food', estimate.foodCost],
-            ['Tolls', estimate.tollCost],
-            ['Parking', estimate.parkingCost],
-            ['Other', estimate.otherCost],
-          ] as const
-        )
-          .filter(([, value]) => value > 0)
-          .map(([label, value]) => (
-            <View key={label} style={styles.breakdownRow}>
-              <ThemedText type="small" themeColor="textSecondary">
-                {label}
-              </ThemedText>
-              <ThemedText type="small">{money(value)}</ThemedText>
-            </View>
+      <View style={styles.grid}>
+        {showFuel &&
+          (estimate.fuel ? (
+            <CostCard
+              icon="gas-station"
+              tint={Tints.fuel}
+              title="Fuel"
+              description={`Your route needs about ${Math.round(estimate.fuel.amount)} L of fuel.`}
+              label={`Fuel price (${currency} per litre)`}>
+              <AmountStepper
+                label="Fuel price"
+                {...amountProps('fuelPricePerLiter')}
+                step={0.05}
+                decimals={2}
+                unit={`${symbol}/L`}
+              />
+            </CostCard>
+          ) : (
+            <CostCard
+              icon="gas-station"
+              tint={Tints.fuel}
+              title={`Fuel (${currency})`}
+              description="Pick a vehicle and plan your route to calculate this.">
+              <AmountStepper
+                label="Fuel cost"
+                {...amountProps('fuelCost')}
+                step={10}
+                unit={symbol}
+              />
+            </CostCard>
           ))}
-      </ThemedView>
-    </WizardStepScreen>
+
+        {showCharging &&
+          (estimate.electricity ? (
+            <CostCard
+              icon="ev-station"
+              tint={Tints.charging}
+              title="Charging"
+              description={`Your route needs about ${Math.round(estimate.electricity.amount)} kWh${
+                vehicle?.fuel_type === 'plug_in_hybrid'
+                  ? ' (using the full battery range first)'
+                  : ''
+              }.`}
+              label={`Electricity price (${currency} per kWh)`}>
+              <AmountStepper
+                label="Electricity price"
+                {...amountProps('electricityPricePerKwh')}
+                step={0.05}
+                decimals={2}
+                unit={`${symbol}/kWh`}
+              />
+            </CostCard>
+          ) : (
+            <CostCard
+              icon="ev-station"
+              tint={Tints.charging}
+              title={`Charging (${currency})`}
+              description="Plan your route to calculate this.">
+              <AmountStepper
+                label="Charging cost"
+                {...amountProps('evChargingCost')}
+                step={10}
+                unit={symbol}
+              />
+            </CostCard>
+          ))}
+
+        <CostCard
+          icon="silverware-fork-knife"
+          tint={Tints.food}
+          title="Food"
+          description={`Per person per day (${currency})`}
+          footnote={
+            <View style={styles.footnote}>
+              <MaterialCommunityIcons
+                name="account-group"
+                size={16}
+                color={colors.textSecondary}
+              />
+              <ThemedText type="small" themeColor="textSecondary">
+                {tripLength} = {money(estimate.foodCost)}
+              </ThemedText>
+            </View>
+          }>
+          <AmountStepper
+            label="Food per person per day"
+            {...amountProps('foodPerPersonPerDay')}
+            step={5}
+            unit={`${symbol}/day`}
+          />
+        </CostCard>
+
+        <CostCard
+          icon="highway"
+          tint={Tints.tolls}
+          title={`Tolls (${currency})`}
+          description="Highway and road tolls. Road Fees & Borders can fill this in for your route.">
+          <AmountStepper
+            label="Tolls"
+            {...amountProps('tollCost')}
+            step={5}
+            unit={currency}
+          />
+        </CostCard>
+
+        <CostCard
+          icon="parking"
+          tint={Tints.parking}
+          title={`Parking (${currency})`}
+          description="City and attraction parking fees.">
+          <AmountStepper
+            label="Parking"
+            {...amountProps('parkingCost')}
+            step={5}
+            unit={currency}
+          />
+        </CostCard>
+
+        <CostCard
+          icon="plus"
+          tint={Tints.other}
+          title={`Other (${currency})`}
+          description="Accommodation, activities, ferries and more…"
+          wide>
+          <AmountStepper
+            label="Other costs"
+            {...amountProps('otherCost')}
+            step={50}
+            unit={currency}
+          />
+        </CostCard>
+      </View>
+    </PlannerFrame>
   );
 }
 
-function CostSection({
-  emoji,
-  title,
-  children,
-}: PropsWithChildren<{ emoji: string; title: string }>) {
+type BreakdownRow = {
+  key: string;
+  icon: IconName;
+  tint: string;
+  label: string;
+  detail?: string;
+  amount: number;
+};
+
+function IconTile({
+  icon,
+  tint,
+  size = 48,
+}: {
+  icon: IconName;
+  tint: string;
+  size?: number;
+}) {
   return (
-    <View style={styles.section}>
-      <ThemedText type="smallBold" style={styles.sectionTitle}>
-        {emoji} {title}
-      </ThemedText>
-      {children}
+    <View
+      style={[
+        styles.iconTile,
+        {
+          width: size,
+          height: size,
+          borderRadius: size * 0.28,
+          backgroundColor: `${tint}2E`,
+        },
+      ]}>
+      <MaterialCommunityIcons name={icon} size={size * 0.56} color={tint} />
     </View>
   );
 }
 
+function CostCard({
+  icon,
+  tint,
+  title,
+  description,
+  label,
+  footnote,
+  wide = false,
+  children,
+}: PropsWithChildren<{
+  icon: IconName;
+  tint: string;
+  title: string;
+  description: string;
+  label?: string;
+  footnote?: ReactNode;
+  wide?: boolean;
+}>) {
+  const colors = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.card,
+        wide && styles.wideCard,
+        { borderColor: colors.border, backgroundColor: colors.backgroundElement },
+      ]}>
+      <View style={styles.cardHeader}>
+        <IconTile icon={icon} tint={tint} />
+        <View style={styles.cardText}>
+          <ThemedText type="smallBold" style={styles.cardTitle}>
+            {title}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {description}
+          </ThemedText>
+          {label && <ThemedText type="smallBold">{label}</ThemedText>}
+        </View>
+      </View>
+      {children}
+      {footnote}
+    </View>
+  );
+}
+
+/**
+ * Right-hand panel: photo, cost breakdown and the estimated total.
+ */
+function BreakdownPanel({
+  rows,
+  total,
+  forWhom,
+  money,
+}: {
+  rows: BreakdownRow[];
+  total: string;
+  forWhom: string;
+  money: (amount: number) => string;
+}) {
+  const colors = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.panel,
+        { borderColor: colors.border, backgroundColor: colors.backgroundSelected },
+      ]}>
+      <ImageBackground
+        source={panelImage}
+        resizeMode="cover"
+        style={styles.panelPhoto}
+        imageStyle={styles.panelPhotoImage}>
+        <View style={styles.panelBadge}>
+          <MaterialCommunityIcons name="calculator-variant" size={26} color="#93C5FD" />
+          <View>
+            <ThemedText type="smallBold" style={styles.panelBadgeTitle}>
+              Estimated for your trip
+            </ThemedText>
+            <ThemedText type="small" style={styles.panelBadgeText}>
+              Based on your inputs and route
+            </ThemedText>
+          </View>
+        </View>
+      </ImageBackground>
+
+      <View style={styles.panelBody}>
+        <ThemedText type="smallBold" style={styles.sectionTitle}>
+          Cost Breakdown
+        </ThemedText>
+
+        <View style={[styles.rows, { borderColor: colors.border }]}>
+          {rows.map((row, index) => (
+            <View
+              key={row.key}
+              style={[
+                styles.row,
+                index > 0 && { borderTopWidth: 1, borderTopColor: colors.border },
+              ]}>
+              <IconTile icon={row.icon} tint={row.tint} size={36} />
+              <View style={styles.rowText}>
+                <ThemedText type="smallBold">{row.label}</ThemedText>
+                {row.detail && (
+                  <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                    {row.detail}
+                  </ThemedText>
+                )}
+              </View>
+              <ThemedText
+                type="smallBold"
+                themeColor={row.amount > 0 ? 'text' : 'textSecondary'}>
+                {money(row.amount)}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.total}>
+          <IconTile icon="calculator" tint={Tints.total} size={44} />
+          <View style={styles.rowText}>
+            <ThemedText type="smallBold" style={styles.totalTitle}>
+              Estimated total
+            </ThemedText>
+            <ThemedText type="small" style={styles.totalText}>
+              {forWhom}
+            </ThemedText>
+          </View>
+          <ThemedText style={styles.totalValue}>{total}</ThemedText>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TotalSummary({
+  total,
+  perPerson,
+}: {
+  total: string;
+  perPerson: string | null;
+}) {
+  return (
+    <View style={styles.summary}>
+      <IconTile icon="wallet-outline" tint={Tints.total} size={40} />
+      <View style={styles.rowText}>
+        <ThemedText type="smallBold">Estimated total: {total}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {perPerson
+            ? `≈ ${perPerson} per person`
+            : 'You can change these amounts any time before creating the trip.'}
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
+// e.g. "€", "kr", "£".
+function currencySymbol(currency: string) {
+  try {
+    return (
+      new Intl.NumberFormat(undefined, { style: 'currency', currency })
+        .formatToParts(0)
+        .find((part) => part.type === 'currency')?.value ?? currency
+    );
+  } catch {
+    return currency;
+  }
+}
+
+// Unit prices keep their cents, e.g. "€1.85".
+function formatPrice(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
 const styles = StyleSheet.create({
-  section: {
+  tip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: Spacing.three,
+  },
+
+  tipText: {
+    flex: 1,
+    minWidth: 200,
+  },
+
+  tipButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+
+  disabled: {
+    opacity: 0.5,
+  },
+
+  currency: {
+    gap: Spacing.three,
+  },
+
+  currencyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
   },
 
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 17,
   },
 
-  row: {
+  pills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+
+  pill: {
+    minWidth: 96,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two + Spacing.one,
+  },
+
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.three,
   },
 
-  column: {
+  card: {
     flexGrow: 1,
-    flexBasis: 200,
+    flexBasis: '40%',
+    minWidth: 260,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: Spacing.three,
+    gap: Spacing.three,
   },
 
-  total: {
-    padding: Spacing.three,
-    borderRadius: 12,
+  wideCard: {
+    flexBasis: '100%',
+  },
+
+  cardHeader: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+  },
+
+  cardText: {
+    flex: 1,
+    gap: Spacing.half,
+  },
+
+  cardTitle: {
+    fontSize: 17,
+  },
+
+  iconTile: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  footnote: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
   },
 
-  totalHeader: {
+  panel: {
+    borderWidth: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+
+  panelPhoto: {
+    height: 230,
+    padding: Spacing.three,
+  },
+
+  panelPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+
+  panelBadge: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.three,
+    borderRadius: 14,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    backgroundColor: 'rgba(8, 18, 32, 0.72)',
+  },
+
+  panelBadgeTitle: {
+    color: '#FFFFFF',
+  },
+
+  panelBadgeText: {
+    color: '#CBD5E1',
+  },
+
+  panelBody: {
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
+
+  rows: {
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two + Spacing.one,
+  },
+
+  rowText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  total: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderRadius: 16,
+    padding: Spacing.three,
+    backgroundColor: '#0B3B2A',
+    borderWidth: 1,
+    borderColor: '#166534',
+  },
+
+  totalTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+
+  totalText: {
+    color: '#BBF7D0',
   },
 
   totalValue: {
-    fontSize: 24,
-    lineHeight: 32,
+    color: '#4ADE80',
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '800',
   },
 
-  divider: {
-    height: 1,
-  },
-
-  breakdownRow: {
+  summary: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Spacing.three,
   },
 });

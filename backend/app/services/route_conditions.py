@@ -56,28 +56,43 @@ def arrival_dates(
     departure_at: datetime,
     leg_durations_seconds: list[float],
     max_driving_hours_per_day: float | None,
+    stay_nights: list[int] | None = None,
 ) -> list[date]:
     """
     Estimated date at each route point (start, then the end of every leg).
 
     Without a daily limit the drive is continuous. With one, driving
-    continues on the next day once the day's hours are used up.
+    continues on the next day once the day's hours are used up. After a
+    place with N nights (`stay_nights`, one per leg), driving resumes N days
+    later at the original departure time.
     """
 
+    # One per leg; missing entries mean driving straight on.
+    nights = list(stay_nights or []) + [0] * len(leg_durations_seconds)
     dates = [departure_at.date()]
+    # When the current stretch of driving started.
+    set_off = departure_at
     driven_seconds = 0.0
 
-    for duration in leg_durations_seconds:
+    for duration, stay in zip(leg_durations_seconds, nights):
         driven_seconds += duration
 
         if max_driving_hours_per_day:
             limit_seconds = max_driving_hours_per_day * 3600
             # A leg ending exactly at the limit still arrives that day.
             day_offset = max(0, int((driven_seconds - 1) // limit_seconds))
-            dates.append(departure_at.date() + timedelta(days=day_offset))
+            arrival_date = set_off.date() + timedelta(days=day_offset)
         else:
-            arrival = departure_at + timedelta(seconds=driven_seconds)
-            dates.append(arrival.date())
+            arrival_date = (set_off + timedelta(seconds=driven_seconds)).date()
+
+        dates.append(arrival_date)
+
+        if stay > 0:
+            set_off = datetime.combine(
+                arrival_date + timedelta(days=stay),
+                departure_at.time(),
+            )
+            driven_seconds = 0.0
 
     return dates
 
@@ -140,6 +155,7 @@ def build_route_conditions(
     weather_provider: WeatherProvider,
     elevation_provider: ElevationProvider,
     today: date,
+    stay_nights: list[int] | None = None,
 ) -> dict:
     """
     Weather at each route point on the day it's reached, plus a terrain
@@ -162,6 +178,7 @@ def build_route_conditions(
         departure_at,
         [leg["duration_seconds"] for leg in route["legs"]],
         max_driving_hours_per_day,
+        stay_nights,
     )
     last_forecast_day = today + timedelta(days=FORECAST_DAYS - 1)
 

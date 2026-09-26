@@ -4,6 +4,10 @@ from enum import Enum
 from pydantic import BaseModel, Field, field_validator
 
 
+# Longest stay at one place on a trip.
+MAX_STAY_NIGHTS = 90
+
+
 class TripType(str, Enum):
     ONE_WAY = "one_way"
     ROUND_TRIP = "round_trip"
@@ -35,6 +39,8 @@ class TripCreate(BaseModel):
     departure_at: datetime
     travelers: int = Field(ge=1)
     duration_days: int = Field(ge=1)
+    # Nights at the destination (the last stop).
+    destination_nights: int = Field(default=0, ge=0, le=MAX_STAY_NIGHTS)
     vehicle_id: int | None = Field(default=None, gt=0)
     max_driving_hours_per_day: float | None = Field(default=None, ge=0)
     max_distance_per_day: float | None = Field(default=None, ge=0)
@@ -53,6 +59,8 @@ class TripUpdate(BaseModel):
     departure_at: datetime
     travelers: int = Field(ge=1)
     duration_days: int = Field(ge=1)
+    # Nights at the destination (the last stop).
+    destination_nights: int = Field(default=0, ge=0, le=MAX_STAY_NIGHTS)
     vehicle_id: int | None = Field(default=None, gt=0)
     max_driving_hours_per_day: float | None = Field(default=None, ge=0)
     max_distance_per_day: float | None = Field(default=None, ge=0)
@@ -73,6 +81,7 @@ class TripResponse(BaseModel):
     departure_at: datetime
     travelers: int
     duration_days: int
+    destination_nights: int
     vehicle_id: int | None
     max_driving_hours_per_day: float | None
     max_distance_per_day: float | None

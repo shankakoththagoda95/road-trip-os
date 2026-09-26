@@ -9,10 +9,10 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#172033',
-    background: '#F7F9FC',
+    text: '#111827',
+    background: '#F5F7FA',
     backgroundElement: '#FFFFFF',
-    backgroundSelected: '#E8EEF8',
+    backgroundSelected: '#EEF2F6',
     textSecondary: '#5B6475',
 
     primary: '#2563EB',
@@ -25,16 +25,23 @@ export const Colors = {
     danger: '#DC2626',
     info: '#0284C7',
 
-    border: '#DCE3EF',
+    border: '#E3E8EF',
     card: '#FFFFFF',
+
+    // Brand green (dashboard, sidebar, main calls to action).
+    brand: '#2F7D3A',
+    brandSoft: '#E6F4E4',
+    brandText: '#1F5F2A',
+    // Text on top of `brand`.
+    onBrand: '#FFFFFF',
   },
 
   dark: {
     text: '#F4F7FB',
-    background: '#101827',
-    backgroundElement: '#182235',
-    backgroundSelected: '#24344D',
-    textSecondary: '#AAB6C8',
+    background: '#0A1420',
+    backgroundElement: '#0F1B29',
+    backgroundSelected: '#16263A',
+    textSecondary: '#A9B6C6',
 
     primary: '#60A5FA',
     secondary: '#2DD4BF',
@@ -46,8 +53,13 @@ export const Colors = {
     danger: '#F87171',
     info: '#38BDF8',
 
-    border: '#30415C',
-    card: '#1C293D',
+    border: '#1D2B3C',
+    card: '#0F1C2B',
+
+    brand: '#86E08F',
+    brandSoft: '#142628',
+    brandText: '#8BD17C',
+    onBrand: '#0B1F12',
   },
 } as const;
 
