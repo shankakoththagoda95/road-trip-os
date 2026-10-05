@@ -100,8 +100,22 @@ def outbox(monkeypatch):
         "app.api.v1.users.check_email_address",
         lambda email: email.strip().lower(),
     )
+    monkeypatch.setattr(
+        "app.api.v1.admin.check_email_address",
+        lambda email: email.strip().lower(),
+    )
 
     return sent
+
+
+@pytest.fixture(autouse=True)
+def registration_open(monkeypatch):
+    """
+    Sign-up tests run with self sign-up on; tests of the closed sign-up
+    switch it off.
+    """
+
+    monkeypatch.setattr("app.core.settings.REGISTRATION_OPEN", True)
 
 
 @pytest.fixture

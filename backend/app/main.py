@@ -16,6 +16,7 @@ from app.api.v1.trips import router as trips_router
 from app.api.v1.trip_destinations import router as trip_destinations_router
 from app.api.v1.trip_checklist import router as trip_checklist_router
 from app.api.v1.stations import router as stations_router
+from app.api.v1.admin import router as admin_router
 from app.api.v1.itineraries import router as itineraries_router
 from app.api.v1.trip_fuel import router as trip_fuel_router
 from app.api.v1.user_settings import router as user_settings_router
@@ -101,6 +102,7 @@ app.include_router(routes_router)
 app.include_router(checklists_router)
 app.include_router(trip_checklist_router)
 app.include_router(stations_router)
+app.include_router(admin_router)
 app.include_router(places_router)
 
 

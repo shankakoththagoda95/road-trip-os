@@ -49,6 +49,8 @@ function AppNavigation() {
           {/* Opened from emailed links, whether or not someone is signed in. */}
           <Stack.Screen name="verify-email" />
           <Stack.Screen name="reset-password" />
+          {/* Only reached by typing /admin; the page checks for an admin. */}
+          <Stack.Screen name="admin" />
         </Stack>
       </AppShell>
     </ThemeProvider>

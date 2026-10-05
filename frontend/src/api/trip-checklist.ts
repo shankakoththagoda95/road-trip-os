@@ -60,3 +60,42 @@ export function updateTripChecklistItem(
 export function deleteTripChecklistItem(tripId: number, itemId: number) {
   return apiRequest<void>(`${base(tripId)}${itemId}`, { method: 'DELETE' });
 }
+
+// --- Meal plan ---
+
+export type MealName = 'breakfast' | 'lunch' | 'dinner' | 'snacks';
+export type MealKind = 'fast_food' | 'home_prep';
+
+export type TripMeal = {
+  // Null for the trip's snacks.
+  day_number: number | null;
+  meal: MealName;
+  kind: MealKind;
+  // Home-prepared meals only.
+  description: string | null;
+};
+
+export type TripMealPlan = {
+  days: {
+    day_number: number;
+    breakfast: TripMeal;
+    lunch: TripMeal;
+    dinner: TripMeal;
+  }[];
+  snacks: TripMeal;
+};
+
+/**
+ * Three meals for every day plus snacks for the trip (unplanned meals come
+ * back as fast food).
+ */
+export function getMealPlan(tripId: number) {
+  return apiRequest<TripMealPlan>(`${base(tripId)}meals`);
+}
+
+export function updateMeal(tripId: number, meal: TripMeal) {
+  return apiRequest<TripMeal>(`${base(tripId)}meals`, {
+    method: 'PUT',
+    body: meal,
+  });
+}

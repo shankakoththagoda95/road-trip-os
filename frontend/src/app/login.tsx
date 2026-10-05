@@ -2,6 +2,7 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { getRegistrationStatus } from '@/api/auth';
 import { ApiError, errorMessage } from '@/api/client';
 import { AuthScreen } from '@/components/auth/auth-screen';
 import { ResendVerification } from '@/components/auth/resend-verification';
@@ -10,9 +11,14 @@ import { PrimaryButton } from '@/components/form/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useAsync } from '@/hooks/use-async';
 import { useSession } from '@/hooks/use-session';
 
 export default function LoginScreen() {
+  // Sign-up link only while self sign-up is open.
+  const [registration] = useAsync(() => getRegistrationStatus(), []);
+  const signUpOpen =
+    registration.status === 'success' && registration.data.open;
   const router = useRouter();
   const { signIn } = useSession();
   const params = useLocalSearchParams<{ email?: string }>();
@@ -54,9 +60,13 @@ export default function LoginScreen() {
       title="Welcome back"
       subtitle="Sign in to plan your next road trip."
       formError={formError}
-      footerText="New to Road-Trip OS?"
-      footerLinkLabel="Create an account"
-      footerHref="/register">
+      footerText={
+        signUpOpen
+          ? 'New to Road-Trip OS?'
+          : 'New here? Accounts are created by the administrator.'
+      }
+      footerLinkLabel={signUpOpen ? 'Create an account' : undefined}
+      footerHref={signUpOpen ? '/register' : undefined}>
       {unverifiedEmail && (
         <ThemedView
           type="backgroundSelected"

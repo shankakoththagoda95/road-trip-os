@@ -119,12 +119,6 @@ const SignedOutItems: NavItem[] = [
     href: '/login',
     isActive: (p) => p === '/login' || p === '/forgot-password',
   },
-  {
-    label: 'Create account',
-    icon: 'person-add-outline',
-    href: '/register',
-    isActive: (p) => p === '/register' || p === '/check-email',
-  },
 ];
 
 /**
@@ -138,6 +132,12 @@ export function AppShell({ children }: PropsWithChildren) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const wide = width >= SidebarBreakpoint;
   const palette = Palettes[theme];
+  const pathname = usePathname();
+
+  // The admin console stands alone: no app navigation leads to it.
+  if (pathname.startsWith('/admin')) {
+    return <View style={styles.adminPage}>{children}</View>;
+  }
 
   if (wide) {
     return (
@@ -328,6 +328,10 @@ function SidebarItem({
 }
 
 const styles = StyleSheet.create({
+  adminPage: {
+    flex: 1,
+  },
+
   row: {
     flex: 1,
     flexDirection: 'row',

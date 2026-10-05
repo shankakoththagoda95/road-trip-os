@@ -6,6 +6,8 @@ export type User = {
   first_name: string;
   last_name: string;
   email_verified: boolean;
+  // Can open the admin panel (/admin).
+  is_admin: boolean;
 };
 
 export type RegisterData = {
@@ -28,6 +30,12 @@ export function login(email: string, password: string) {
     method: 'POST',
     body: { email, password },
   });
+}
+
+// Whether people can create their own account; otherwise an
+// administrator creates accounts.
+export function getRegistrationStatus() {
+  return apiRequest<{ open: boolean }>('/users/registration');
 }
 
 // Creates an unverified account and emails a confirmation link.

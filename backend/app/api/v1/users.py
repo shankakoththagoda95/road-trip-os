@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
+from app.core import settings
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.user import User
@@ -29,6 +30,16 @@ def test_users():
     return {"message": "Users API is working!"}
 
 
+@router.get("/registration")
+def registration_status():
+    """
+    Whether people can create their own account (otherwise an
+    administrator creates accounts).
+    """
+
+    return {"open": settings.REGISTRATION_OPEN}
+
+
 def find_user_by_email(db: Session, email: str) -> User | None:
     """
     Case-insensitive lookup (older accounts may have mixed-case emails).
@@ -48,7 +59,19 @@ def create_user(
     """
     Create an unverified account and email a verification link. The user
     can sign in once they've clicked it.
+
+    Only while self sign-up is open (REGISTRATION_OPEN); otherwise accounts
+    are created by an administrator.
     """
+
+    if not settings.REGISTRATION_OPEN:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "registration_closed",
+                "message": "New accounts are created by the administrator.",
+            },
+        )
 
     try:
         email = check_email_address(user_data.email)

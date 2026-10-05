@@ -27,6 +27,7 @@ import {
   type TripRoute,
 } from '@/api/trips';
 import { getVehicle } from '@/api/vehicles';
+import { MealPlanSection } from '@/components/checklist/meal-plan-section';
 import { TripChecklistSection } from '@/components/checklist/trip-checklist-section';
 import { PrimaryButton } from '@/components/form/primary-button';
 import { RouteMap } from '@/components/route-map/route-map';
@@ -184,7 +185,10 @@ export default function TripDetailScreen() {
         ) : null;
       case 'checklist':
         return (
-          <TripChecklistSection tripId={trip.id} refreshKey={refreshKey} />
+          <>
+            <MealPlanSection trip={trip} refreshKey={refreshKey} />
+            <TripChecklistSection tripId={trip.id} refreshKey={refreshKey} />
+          </>
         );
       case 'fees':
         return withRoute((data) => <FeesSection trip={trip} route={data} />);
@@ -239,7 +243,11 @@ const DetailTabs: TabItem<DetailTab>[] = [
   { id: 'itinerary', label: 'Itinerary', icon: 'calendar-month-outline' },
   { id: 'budget', label: 'Budget', icon: 'wallet-outline' },
   { id: 'vehicle', label: 'Vehicle', icon: 'car-outline' },
-  { id: 'checklist', label: 'Checklist', icon: 'clipboard-check-outline' },
+  {
+    id: 'checklist',
+    label: 'Meals and Checklist',
+    icon: 'clipboard-check-outline',
+  },
   { id: 'fees', label: 'Road fees', icon: 'highway' },
   { id: 'weather', label: 'Weather', icon: 'weather-partly-cloudy' },
 ];

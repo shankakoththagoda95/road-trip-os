@@ -63,14 +63,16 @@ export function AuthScreen({
         {children}
       </ThemedView>
 
-      {footerHref && footerLinkLabel ? (
+      {footerText || (footerHref && footerLinkLabel) ? (
         <View style={styles.footer}>
           {footerText ? (
             <ThemedText style={styles.footerText}>{footerText}</ThemedText>
           ) : null}
-          <Link href={footerHref} replace>
-            <ThemedText style={styles.footerLink}>{footerLinkLabel}</ThemedText>
-          </Link>
+          {footerHref && footerLinkLabel ? (
+            <Link href={footerHref} replace>
+              <ThemedText style={styles.footerLink}>{footerLinkLabel}</ThemedText>
+            </Link>
+          ) : null}
         </View>
       ) : null}
     </Screen>

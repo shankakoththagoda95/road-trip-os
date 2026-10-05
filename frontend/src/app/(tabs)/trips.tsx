@@ -12,10 +12,12 @@ import {
   type TextStyle,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from 'react-native';
 
 import { errorMessage } from '@/api/client';
 import { deleteTrip, listTrips, type Trip } from '@/api/trips';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { BannerScrim } from '@/components/dashboard/banner-scrim';
 import { GradientFill } from '@/components/gradient-fill';
 import { Screen } from '@/components/screen';
@@ -43,6 +45,19 @@ const Thumbnails = [
 // Banner photo is a 1920 × 640 strip of newtrip.png; the banner keeps that
 // shape so it is never cropped or stretched.
 const BannerAspectRatio = 1920 / 640;
+
+// Web supports fixed positioning; used to close the trip menu on an
+// outside click.
+const FullScreen = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+} as unknown as ViewStyle;
+
+// Popup closing animation (see ModalDialog), plus a little.
+const DialogCloseMs = 260;
 // Fade colours taken from the photo's own warm grey (≈ rgb 115, 105, 104),
 // darkened / lightened, so the fade blends into the picture.
 const ScrimColors = { dark: '30, 26, 25', light: '246, 242, 240' };
@@ -473,7 +488,9 @@ function TripCard({ trip, onChanged }: { trip: Trip; onChanged: () => void }) {
 
     try {
       await deleteTrip(trip.id);
-      onChanged();
+      setConfirmingDelete(false);
+      // Let the popup fade out before the card leaves the list.
+      setTimeout(onChanged, DialogCloseMs);
     } catch (deleteError) {
       setError(errorMessage(deleteError));
       setDeleting(false);
@@ -503,7 +520,7 @@ function TripCard({ trip, onChanged }: { trip: Trip; onChanged: () => void }) {
       </Pressable>
 
       <View style={styles.cardBody}>
-        <View style={styles.cardTop}>
+        <View style={[styles.cardTop, menuOpen && styles.cardTopRaised]}>
           <Pressable
             accessibilityRole="link"
             onPress={open}
@@ -534,6 +551,13 @@ function TripCard({ trip, onChanged }: { trip: Trip; onChanged: () => void }) {
             </View>
 
             <View style={styles.anchor}>
+              {menuOpen && (
+                <Pressable
+                  accessibilityLabel="Close menu"
+                  onPress={() => setMenuOpen(false)}
+                  style={FullScreen}
+                />
+              )}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Trip actions"
@@ -612,48 +636,48 @@ function TripCard({ trip, onChanged }: { trip: Trip; onChanged: () => void }) {
             </ThemedText>
           </View>
 
-          {confirmingDelete ? (
-            <View style={styles.confirm}>
-              <ThemedText type="small">Delete this trip?</ThemedText>
-              <Pressable
-                accessibilityRole="button"
-                disabled={deleting}
-                onPress={handleDelete}
-                style={[styles.detailsButton, { backgroundColor: colors.danger, borderColor: colors.danger }]}>
-                <Text style={styles.dangerText}>{deleting ? 'Deleting…' : 'Delete'}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                disabled={deleting}
-                onPress={() => setConfirmingDelete(false)}
-                style={[styles.detailsButton, { borderColor: colors.border }]}>
-                <ThemedText type="smallBold">Cancel</ThemedText>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              accessibilityRole="link"
-              onPress={open}
-              style={({ hovered }) => [
-                styles.detailsButton,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: hovered
-                    ? colors.backgroundSelected
-                    : colors.backgroundElement,
-                },
-              ]}>
-              <ThemedText type="smallBold">View details →</ThemedText>
-            </Pressable>
-          )}
+          <Pressable
+            accessibilityRole="link"
+            onPress={open}
+            style={({ hovered }) => [
+              styles.detailsButton,
+              {
+                borderColor: colors.border,
+                backgroundColor: hovered
+                  ? colors.backgroundSelected
+                  : colors.backgroundElement,
+              },
+            ]}>
+            <ThemedText type="smallBold">View details →</ThemedText>
+          </Pressable>
         </View>
-
-        {error && (
-          <ThemedText type="small" themeColor="danger">
-            {error}
-          </ThemedText>
-        )}
       </View>
+
+      <ConfirmDialog
+        visible={confirmingDelete}
+        title="Delete this trip?"
+        message="This permanently deletes the trip and everything saved with it: stops, itinerary, budget and checklist. It can't be undone."
+        details={
+          <>
+            <ThemedText type="smallBold">{trip.name}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {trip.start_location}{' '}
+              {trip.trip_type === 'round_trip' ? '⇄' : '→'} {trip.destination} ·{' '}
+              {formatShortDate(departure)} – {formatShortDate(end)}
+            </ThemedText>
+          </>
+        }
+        confirmLabel="Delete trip"
+        busyLabel="Deleting…"
+        danger
+        busy={deleting}
+        error={error}
+        onConfirm={handleDelete}
+        onCancel={() => {
+          setConfirmingDelete(false);
+          setError(null);
+        }}
+      />
     </ThemedView>
   );
 }
@@ -1065,6 +1089,12 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
 
+  // Every view on web is its own layer, so lift the row with the open menu
+  // above the rest of the card.
+  cardTopRaised: {
+    zIndex: 2,
+  },
+
   cardTitleBlock: {
     flex: 1,
     minWidth: 0,
@@ -1146,16 +1176,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  confirm: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-
-  dangerText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
 });

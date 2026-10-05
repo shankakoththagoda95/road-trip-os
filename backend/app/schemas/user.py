@@ -53,6 +53,7 @@ class UserResponse(BaseModel):
     first_name: str
     last_name: str
     email_verified: bool
+    is_admin: bool = False
 
 
 class UserLogin(BaseModel):

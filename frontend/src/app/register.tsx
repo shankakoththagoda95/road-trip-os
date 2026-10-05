@@ -1,14 +1,16 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import type { RegisterData } from '@/api/auth';
+import { getRegistrationStatus, type RegisterData } from '@/api/auth';
 import { ApiError, errorMessage } from '@/api/client';
 import { AuthScreen } from '@/components/auth/auth-screen';
 import { PasswordRequirements } from '@/components/auth/password-requirements';
 import { TextField } from '@/components/form/form-field';
 import { PrimaryButton } from '@/components/form/primary-button';
+import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useAsync } from '@/hooks/use-async';
 import { useSession } from '@/hooks/use-session';
 import { isValidEmail, passwordIsValid } from '@/utils/password';
 
@@ -23,7 +25,7 @@ const emptyForm: RegisterForm = {
   confirm_password: '',
 };
 
-export default function RegisterScreen() {
+function SignUpForm() {
   const router = useRouter();
   const { register } = useSession();
 
@@ -186,6 +188,21 @@ function validate(form: RegisterForm): RegisterErrors {
 }
 
 const styles = StyleSheet.create({
+  closed: {
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingVertical: Spacing.three,
+  },
+
+  closedIcon: {
+    fontSize: 40,
+    lineHeight: 48,
+  },
+
+  closedText: {
+    textAlign: 'center',
+  },
+
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -197,3 +214,38 @@ const styles = StyleSheet.create({
     flexBasis: 180,
   },
 });
+
+/**
+ * The sign-up form while self sign-up is open; otherwise a note that the
+ * administrator creates accounts.
+ */
+export default function RegisterScreen() {
+  const [registration] = useAsync(() => getRegistrationStatus(), []);
+
+  if (registration.status === 'success' && registration.data.open) {
+    return <SignUpForm />;
+  }
+
+  return (
+    <AuthScreen
+      title="Create an account"
+      subtitle="Accounts are created by the administrator."
+      footerText="Already have an account?"
+      footerLinkLabel="Sign in"
+      footerHref="/login">
+      {registration.status === 'loading' ? (
+        <ActivityIndicator />
+      ) : (
+        <View style={styles.closed}>
+          <ThemedText style={styles.closedIcon}>🔒</ThemedText>
+          <ThemedText type="smallBold">Sign-up is closed</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.closedText}>
+            New accounts are created by the administrator. Ask them to set
+            one up for you, then sign in with the email and password they
+            give you.
+          </ThemedText>
+        </View>
+      )}
+    </AuthScreen>
+  );
+}

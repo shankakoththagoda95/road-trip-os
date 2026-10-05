@@ -31,6 +31,7 @@ from app.models.itinerary import Itinerary
 from app.models.itinerary_day import ItineraryDay
 from app.models.trip_budget import TripBudget
 from app.models.trip_checklist_item import TripChecklistItem
+from app.models.trip_meal import TripMeal
 from app.models.trip_ev import TripEV
 from app.models.trip_fuel import TripFuel
 from app.models.user_settings import UserSettings
@@ -318,6 +319,7 @@ def delete_trip(
         TripDestination,
         TripBudget,
         TripChecklistItem,
+        TripMeal,
         TripFuel,
         TripEV,
         TripLocation,

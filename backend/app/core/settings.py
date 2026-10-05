@@ -28,3 +28,9 @@ EMAIL_RESEND_COOLDOWN_SECONDS = 60
 # Google Maps Platform key with "Places API (New)" enabled. Used for stop
 # photos; leave empty to show placeholders instead.
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
+
+# Self sign-up. Off: accounts are created by an administrator at /admin.
+REGISTRATION_OPEN = os.getenv("REGISTRATION_OPEN", "false").lower() == "true"
+
+# The admin API only answers requests from this computer.
+ADMIN_LOCAL_ONLY = os.getenv("ADMIN_LOCAL_ONLY", "true").lower() != "false"
