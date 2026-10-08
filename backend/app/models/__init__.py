@@ -1,4 +1,5 @@
 from app.models.user import User
+from app.models.app_setting import AppSetting
 from app.models.vehicle import Vehicle
 from app.models.trip import Trip
 from app.models.trip_destination import TripDestination
@@ -15,6 +16,7 @@ from app.models.trip_meal import TripMeal
 
 __all__ = [
     "User",
+    "AppSetting",
     "Vehicle",
     "Trip",
     "TripDestination",

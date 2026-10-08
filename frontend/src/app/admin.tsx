@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ComponentProps, useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,7 +15,9 @@ import {
   type AdminUser,
   type AdminUserCreate,
   createUser,
+  getAdminSettings,
   listUsers,
+  updateAdminSettings,
 } from '@/api/admin';
 import { ApiError, errorMessage } from '@/api/client';
 import { PasswordRequirements } from '@/components/auth/password-requirements';
@@ -29,7 +32,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { isValidEmail, passwordIsValid } from '@/utils/password';
 
 // Width from which the form and the account list sit side by side.
-const TwoColumns = 960;
+const TwoColumns = 1240;
 
 /**
  * Administrator console: create accounts and see who has one. Reached only
@@ -57,7 +60,7 @@ export default function AdminScreen() {
                   Road-Trip OS · Admin
                 </ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  Account management
+                  Administration
                 </ThemedText>
               </View>
             </View>
@@ -191,7 +194,238 @@ const emptyForm: AdminUserCreate = {
 
 type FormErrors = Partial<Record<keyof AdminUserCreate, string>>;
 
+type Section = 'accounts' | 'settings';
+
+const Sections: { id: Section; label: string; icon: IconName; hint: string }[] =
+  [
+    {
+      id: 'accounts',
+      label: 'Accounts',
+      icon: 'people-outline',
+      hint: 'Create and view accounts',
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: 'settings-outline',
+      hint: 'Sign-up and app options',
+    },
+  ];
+
+// Width from which the admin navigation sits on the left.
+const SideNav = 900;
+
+/**
+ * The console: navigation on the left (on top on narrow screens) and the
+ * chosen section. The section is kept in the URL (?section=settings).
+ */
 function AdminConsole() {
+  const colors = useTheme();
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const { section: sectionParam } = useLocalSearchParams<{
+    section?: string;
+  }>();
+  const section: Section =
+    sectionParam === 'settings' ? 'settings' : 'accounts';
+  const wide = width >= SideNav;
+
+  return (
+    <View style={[styles.shell, wide && styles.shellWide]}>
+      <View
+        accessibilityRole="tablist"
+        style={[
+          styles.nav,
+          wide ? styles.navWide : styles.navNarrow,
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.backgroundElement,
+          },
+        ]}>
+        {Sections.map((item) => {
+          const active = item.id === section;
+
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              aria-selected={active}
+              onPress={() => router.setParams({ section: item.id })}
+              style={({ hovered }) => [
+                styles.navItem,
+                !wide && styles.navItemNarrow,
+                active && { backgroundColor: colors.primary },
+                hovered &&
+                  !active && { backgroundColor: colors.backgroundSelected },
+              ]}>
+              <Ionicons
+                name={item.icon}
+                size={20}
+                color={active ? '#FFFFFF' : colors.textSecondary}
+              />
+              <View style={styles.navText}>
+                <ThemedText
+                  type="smallBold"
+                  style={{ color: active ? '#FFFFFF' : colors.text }}>
+                  {item.label}
+                </ThemedText>
+                {wide && (
+                  <ThemedText
+                    type="small"
+                    style={{
+                      color: active ? '#DBEAFE' : colors.textSecondary,
+                    }}>
+                    {item.hint}
+                  </ThemedText>
+                )}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.sectionArea}>
+        {section === 'settings' ? <SettingsView /> : <AccountsView />}
+      </View>
+    </View>
+  );
+}
+
+function SettingsView() {
+  const colors = useTheme();
+  const [state, reload] = useAsync(() => getAdminSettings(), []);
+  // The value after the admin's last change (until a reload).
+  const [registration, setRegistration] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const open =
+    registration ??
+    (state.status === 'success' ? state.data.registration_open : false);
+
+  async function toggle(next: boolean) {
+    setRegistration(next);
+    setSaving(true);
+    setError(null);
+
+    try {
+      const saved = await updateAdminSettings({ registration_open: next });
+      setRegistration(saved.registration_open);
+    } catch (saveError) {
+      setRegistration(!next);
+      setError(errorMessage(saveError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (
+    state.status === 'error' &&
+    state.error instanceof ApiError &&
+    state.error.code === 'admin_local_only'
+  ) {
+    return <LocalOnlyNotice />;
+  }
+
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          borderColor: colors.border,
+          backgroundColor: colors.backgroundElement,
+        },
+      ]}>
+      <View style={styles.cardHeader}>
+        <Ionicons name="settings-outline" size={26} color={colors.primary} />
+        <View style={styles.cardHeaderText}>
+          <ThemedText type="smallBold" style={styles.cardTitle}>
+            Settings
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Changes apply straight away for everyone.
+          </ThemedText>
+        </View>
+      </View>
+
+      {state.status === 'loading' ? (
+        <ActivityIndicator />
+      ) : state.status === 'error' ? (
+        <View style={styles.settingError}>
+          <ThemedText type="small" themeColor="danger">
+            {state.message}
+          </ThemedText>
+          <Pressable accessibilityRole="button" onPress={reload}>
+            <ThemedText type="linkPrimary">Try again</ThemedText>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={[styles.settingRow, { borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.settingIcon,
+              {
+                backgroundColor: open
+                  ? `${colors.success}22`
+                  : colors.backgroundSelected,
+              },
+            ]}>
+            <Ionicons
+              name={open ? 'person-add-outline' : 'lock-closed-outline'}
+              size={22}
+              color={open ? colors.success : colors.textSecondary}
+            />
+          </View>
+          <View style={styles.cardHeaderText}>
+            <ThemedText type="smallBold">Registration</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {open
+                ? 'Open: anyone can create an account at /register (they confirm their email first).'
+                : 'Closed: only administrators can create accounts, here in Accounts.'}
+            </ThemedText>
+            {error && (
+              <ThemedText
+                type="small"
+                themeColor="danger"
+                accessibilityRole="alert">
+                Couldn&apos;t save: {error}
+              </ThemedText>
+            )}
+          </View>
+          <View style={styles.settingControl}>
+            {saving && <ActivityIndicator size="small" />}
+            <ThemedText
+              type="smallBold"
+              style={{ color: open ? colors.success : colors.textSecondary }}>
+              {open ? 'Open' : 'Closed'}
+            </ThemedText>
+            <Switch
+              accessibilityLabel="Allow registration"
+              value={open}
+              disabled={saving}
+              onValueChange={toggle}
+              trackColor={{ true: colors.success, false: colors.border }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function LocalOnlyNotice() {
+  return (
+    <Notice
+      icon="desktop-outline"
+      title="Only on this computer"
+      text="The admin panel only works on the computer that runs Road-Trip OS. Open http://localhost:8081/admin there."
+    />
+  );
+}
+
+function AccountsView() {
   const colors = useTheme();
   const { width } = useWindowDimensions();
   const [usersState, reloadUsers] = useAsync(() => listUsers(), []);
@@ -209,13 +443,7 @@ function AdminConsole() {
     usersState.error.code === 'admin_local_only';
 
   if (localOnly) {
-    return (
-      <Notice
-        icon="desktop-outline"
-        title="Only on this computer"
-        text="The admin panel only works on the computer that runs Road-Trip OS. Open http://localhost:8081/admin there."
-      />
-    );
+    return <LocalOnlyNotice />;
   }
 
   function update<K extends keyof AdminUserCreate>(field: K) {
@@ -576,7 +804,85 @@ function generatePassword() {
   return chars.join('');
 }
 
+type IconName = ComponentProps<typeof Ionicons>['name'];
+
 const styles = StyleSheet.create({
+  shell: {
+    gap: Spacing.four,
+  },
+
+  shellWide: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  nav: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: Spacing.two,
+    gap: Spacing.one,
+  },
+
+  navWide: {
+    width: 250,
+  },
+
+  navNarrow: {
+    flexDirection: 'row',
+  },
+
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderRadius: 14,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+  },
+
+  navItemNarrow: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: Spacing.two,
+  },
+
+  navText: {
+    flexShrink: 1,
+  },
+
+  sectionArea: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  settingRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: Spacing.three,
+  },
+
+  settingIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  settingControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+
+  settingError: {
+    gap: Spacing.two,
+  },
+
   page: {
     flex: 1,
   },

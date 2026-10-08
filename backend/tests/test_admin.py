@@ -167,3 +167,37 @@ def test_registration_status_endpoint(client, monkeypatch):
 
     monkeypatch.setattr("app.core.settings.REGISTRATION_OPEN", True)
     assert client.get("/users/registration").json() == {"open": True}
+
+
+def test_admin_toggles_registration(local_client, admin, client):
+    headers = headers_for(admin)
+    new_user = {**NEW_USER, "email": "selfsignup@example.com"}
+
+    closed = local_client.put("/admin/settings", json={"registration_open": False}, headers=headers)
+    assert closed.json() == {"registration_open": False}
+    assert local_client.get("/admin/settings", headers=headers).json() == {"registration_open": False}
+    assert client.get("/users/registration").json() == {"open": False}
+    assert client.post("/users/", json=new_user).status_code == 403
+
+    opened = local_client.put("/admin/settings", json={"registration_open": True}, headers=headers)
+    assert opened.json() == {"registration_open": True}
+    assert client.get("/users/registration").json() == {"open": True}
+    assert client.post("/users/", json=new_user).status_code == 201
+
+
+def test_registration_follows_the_environment_until_an_admin_sets_it(client, monkeypatch):
+    monkeypatch.setattr("app.core.settings.REGISTRATION_OPEN", False)
+    assert client.get("/users/registration").json() == {"open": False}
+
+
+def test_settings_need_an_admin_on_this_computer(local_client, client, admin, db):
+    user = make_user(db, "regular2@example.com")
+
+    assert local_client.get("/admin/settings", headers=headers_for(user)).status_code == 403
+    assert (
+        local_client.put(
+            "/admin/settings", json={"registration_open": True}, headers=headers_for(user)
+        ).status_code
+        == 403
+    )
+    assert client.get("/admin/settings", headers=headers_for(admin)).status_code == 403

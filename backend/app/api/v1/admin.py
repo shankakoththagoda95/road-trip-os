@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.user import User
 from app.schemas.user import validate_password_strength
+from app.services.app_settings import registration_open, set_registration_open
 from app.services.email_validation import (
     EmailNotAcceptedError,
     check_email_address,
@@ -152,3 +153,31 @@ def create_user(
     db.refresh(user)
 
     return user
+
+
+class AdminSettings(BaseModel):
+    # People can create their own account at /register.
+    registration_open: bool
+
+
+@router.get("/settings", response_model=AdminSettings)
+def get_settings(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return AdminSettings(registration_open=registration_open(db))
+
+
+@router.put("/settings", response_model=AdminSettings)
+def update_settings(
+    changes: AdminSettings,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Change app-wide settings; they apply straight away.
+    """
+
+    set_registration_open(db, changes.registration_open)
+
+    return AdminSettings(registration_open=registration_open(db))

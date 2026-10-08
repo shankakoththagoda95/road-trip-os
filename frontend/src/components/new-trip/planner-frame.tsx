@@ -71,10 +71,14 @@ export function PlannerFrame({
   return (
     <Screen maxWidth={1240}>
       <View style={styles.header}>
-        {step.image && (
+        {(step.icon ?? step.image) && (
           <View
             style={[styles.headerIcon, { backgroundColor: colors.backgroundSelected }]}>
-            <Image source={step.image} style={styles.headerIconImage} />
+            <Image
+              source={step.icon ?? step.image}
+              resizeMode="cover"
+              style={styles.headerIconImage}
+            />
           </View>
         )}
         <View style={styles.headerText}>
@@ -197,14 +201,14 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 18,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   headerIconImage: {
-    width: 46,
-    height: 46,
-    resizeMode: 'contain',
+    width: '100%',
+    height: '100%',
   },
 
   headerText: {

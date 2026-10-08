@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   View,
+  type ImageStyle,
 } from 'react-native';
 
 import { StepProgress } from '@/components/new-trip/step-progress';
@@ -16,21 +18,24 @@ import { Colors, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useTripDraft } from '@/hooks/use-trip-draft';
 
+// Web: ease the opacity change on hover.
+const BackgroundFade = {
+  transitionProperty: 'opacity',
+  transitionDuration: '250ms',
+} as unknown as ImageStyle;
+
 const backgroundImage = require('@/assets/images/back.jpeg');
 
 // Below this width step cards use a smaller thumbnail and drop the arrow.
 const CompactBreakpoint = 640;
 
 // Background behind the step icons (see assets/images/step-icons).
-const IconTileColor = '#EEF3FB';
-
 export default function NewTripScreen() {
   const router = useRouter();
   const colors = useTheme();
   const { width } = useWindowDimensions();
   const compact = width < CompactBreakpoint;
-  const { completedSteps, draft, isPristine, restored, reset } =
-    useTripDraft();
+  const { completedSteps, draft, isPristine, restored, reset } = useTripDraft();
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   // First unfinished step that has been built.
@@ -188,58 +193,88 @@ function TripStepCard({
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}>
-      <View
-        style={[
-          styles.thumbnail,
-          compact && styles.thumbnailCompact,
-          {
-            // Icons are dark blue: keep a light tile in both themes.
-            backgroundColor: step.image
-              ? IconTileColor
-              : colors.backgroundSelected,
-          },
-        ]}>
-        {step.image ? (
-          <Image
-            source={step.image}
-            resizeMode="contain"
-            style={styles.thumbnailImage}
-          />
-        ) : (
-          <ThemedText style={compact ? styles.emojiCompact : styles.emoji}>
-            {step.emoji}
-          </ThemedText>
-        )}
-      </View>
+      {({ hovered }) => (
+        <>
+          {step.background && (
+            <Image
+              source={step.background}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+              style={[
+                styles.background,
+                compact && styles.backgroundCompact,
+                BackgroundFade,
+                { opacity: hovered && !disabled ? 0.5 : 0.2 },
+              ]}
+            />
+          )}
 
-      <View style={styles.cardContent}>
-        <View style={styles.cardTitleRow}>
           <View
             style={[
-              styles.numberBadge,
-              {
-                backgroundColor: complete ? colors.success : colors.primary,
-              },
+              styles.thumbnail,
+              compact && styles.thumbnailCompact,
+              // The scene fades into the card on its own; emojis get a tile.
+              !step.image && [
+                styles.emojiTile,
+                { backgroundColor: colors.backgroundSelected },
+              ],
             ]}>
-            <ThemedText type="smallBold" style={styles.numberText}>
-              {complete ? '✓' : number}
+            {step.image ? (
+              <Image
+                source={step.image}
+                resizeMode="cover"
+                style={styles.thumbnailImage}
+              />
+            ) : (
+              <ThemedText style={compact ? styles.emojiCompact : styles.emoji}>
+                {step.emoji}
+              </ThemedText>
+            )}
+          </View>
+
+          <View style={styles.cardContent}>
+            <View style={styles.cardTitleRow}>
+              <View
+                style={[
+                  styles.numberBadge,
+                  {
+                    backgroundColor: complete ? colors.success : colors.primary,
+                  },
+                ]}>
+                <ThemedText type="smallBold" style={styles.numberText}>
+                  {complete ? '✓' : number}
+                </ThemedText>
+              </View>
+
+              <ThemedText type="smallBold" style={styles.cardTitle}>
+                {step.title}
+              </ThemedText>
+            </View>
+
+            <ThemedText type="small" themeColor="textSecondary">
+              {disabled ? 'Coming soon' : step.description}
             </ThemedText>
           </View>
 
-          <ThemedText type="smallBold" style={styles.cardTitle}>
-            {step.title}
-          </ThemedText>
-        </View>
-
-        <ThemedText type="small" themeColor="textSecondary">
-          {disabled ? 'Coming soon' : step.description}
-        </ThemedText>
-      </View>
-
-      {!compact && !disabled && (
-        <ThemedText themeColor="textSecondary" style={styles.arrow}>
-          ›
-        </ThemedText>
+          {!compact && !disabled && (
+            <View
+              style={[
+                styles.arrow,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: hovered
+                    ? colors.primary
+                    : `${colors.card}CC`,
+                },
+              ]}>
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={hovered ? '#FFFFFF' : colors.text}
+              />
+            </View>
+          )}
+        </>
       )}
     </Pressable>
   );
@@ -316,29 +351,34 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
 
+  // The picture runs to the card's left edge, so the card clips it.
   card: {
     borderWidth: 1,
     borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.two,
+    overflow: 'hidden',
     paddingRight: Spacing.three,
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
 
   thumbnail: {
-    width: 88,
-    height: 88,
-    borderRadius: 16,
+    width: 200,
+    height: 112,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    padding: Spacing.one,
   },
 
   thumbnailCompact: {
-    width: 64,
-    height: 64,
+    width: 128,
+    height: 72,
+  },
+
+  emojiTile: {
+    width: 88,
+    height: 88,
+    margin: Spacing.two,
+    borderRadius: 16,
   },
 
   thumbnailImage: {
@@ -386,9 +426,31 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
 
+  // Round button over the picture, as in the design.
   arrow: {
-    fontSize: 32,
-    lineHeight: 36,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Right-aligned scene behind the text (it fades in from the left).
+  background: {
+    position: 'absolute',
+    // Clicks go to the card.
+    pointerEvents: 'none',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    // Images don't stretch to top/bottom on their own.
+    height: '100%',
+    width: '62%',
+  },
+
+  backgroundCompact: {
+    width: '80%',
   },
 
   pressed: {

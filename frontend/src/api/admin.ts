@@ -25,6 +25,23 @@ export function listUsers() {
   return apiRequest<AdminUser[]>('/admin/users');
 }
 
+export type AdminSettings = {
+  // People can create their own account at /register.
+  registration_open: boolean;
+};
+
+export function getAdminSettings() {
+  return apiRequest<AdminSettings>('/admin/settings');
+}
+
+// Applies straight away.
+export function updateAdminSettings(changes: AdminSettings) {
+  return apiRequest<AdminSettings>('/admin/settings', {
+    method: 'PUT',
+    body: changes,
+  });
+}
+
 /**
  * Creates an account that can sign in straight away.
  */

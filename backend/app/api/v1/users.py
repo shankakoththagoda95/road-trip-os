@@ -5,11 +5,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user
-from app.core import settings
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
+from app.services.app_settings import registration_open
 from app.services.auth_emails import verification_email
 from app.services.email_tokens import create_verification_token
 from app.services.email_validation import (
@@ -31,13 +31,13 @@ def test_users():
 
 
 @router.get("/registration")
-def registration_status():
+def registration_status(db: Session = Depends(get_db)):
     """
     Whether people can create their own account (otherwise an
     administrator creates accounts).
     """
 
-    return {"open": settings.REGISTRATION_OPEN}
+    return {"open": registration_open(db)}
 
 
 def find_user_by_email(db: Session, email: str) -> User | None:
@@ -60,11 +60,11 @@ def create_user(
     Create an unverified account and email a verification link. The user
     can sign in once they've clicked it.
 
-    Only while self sign-up is open (REGISTRATION_OPEN); otherwise accounts
-    are created by an administrator.
+    Only while self sign-up is open (switched in the admin console);
+    otherwise accounts are created by an administrator.
     """
 
-    if not settings.REGISTRATION_OPEN:
+    if not registration_open(db):
         raise HTTPException(
             status_code=403,
             detail={
