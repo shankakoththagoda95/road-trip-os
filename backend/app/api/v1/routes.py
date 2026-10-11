@@ -48,10 +48,6 @@ router = APIRouter(
     tags=["routes"],
 )
 
-# Search radius around each planned stop point.
-FUEL_SEARCH_RADIUS_KM = 5.0
-EV_SEARCH_RADIUS_KM = 10.0
-
 FUEL_TYPE_LABELS = {
     "diesel": "diesel",
     "petrol_95": "petrol 95",
@@ -121,7 +117,9 @@ def preview(
 def fuel_station_finder() -> StationFinder:
     provider = OverpassFuelStationProvider()
 
-    def find(latitude: float, longitude: float) -> list[EnergyStation]:
+    def find(
+        latitude: float, longitude: float, radius_km: float
+    ) -> list[EnergyStation]:
         return [
             EnergyStation(
                 provider_id=station.provider_id,
@@ -136,7 +134,7 @@ def fuel_station_finder() -> StationFinder:
             for station in provider.search_nearby(
                 latitude=latitude,
                 longitude=longitude,
-                radius_km=FUEL_SEARCH_RADIUS_KM,
+                radius_km=radius_km,
             )
         ]
 
@@ -146,7 +144,9 @@ def fuel_station_finder() -> StationFinder:
 def ev_station_finder() -> StationFinder:
     provider = OpenChargeMapProvider()
 
-    def find(latitude: float, longitude: float) -> list[EnergyStation]:
+    def find(
+        latitude: float, longitude: float, radius_km: float
+    ) -> list[EnergyStation]:
         return [
             EnergyStation(
                 provider_id=station.provider_id,
@@ -170,7 +170,7 @@ def ev_station_finder() -> StationFinder:
             for station in provider.search_nearby(
                 latitude=latitude,
                 longitude=longitude,
-                radius_km=EV_SEARCH_RADIUS_KM,
+                radius_km=radius_km,
             )
         ]
 

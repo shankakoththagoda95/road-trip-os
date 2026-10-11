@@ -1,15 +1,24 @@
+import math
 from bisect import bisect_left
 from collections.abc import Callable
 from dataclasses import dataclass, field
+
+import httpx
 
 from app.models.vehicle import Vehicle
 from app.services.geography import calculate_distance_km
 
 
-# How far back along the route to move when no station is found near the
-# ideal stop point, and how many times to try.
-BACKOFF_STEP_KM = 20.0
-MAX_SEARCH_ATTEMPTS = 4
+# Where to look for a station, tried in order (tank / battery level as a
+# percentage of its capacity):
+# 1. at the reserve level (15% by default), then 5% earlier each time up to
+#    40%, within 1 km of the route, then 2 km, then 3 km;
+# 2. as a last resort, 5% later each time down to 5%, within 1-5 km.
+LEVEL_STEP_PERCENT = 5.0
+EARLIEST_LEVEL_PERCENT = 40.0
+LATEST_LEVEL_PERCENT = 5.0
+EARLY_MAX_RADIUS_KM = 3
+LATE_MAX_RADIUS_KM = 5
 
 # Safety net against runaway loops on very long routes.
 MAX_STOPS = 50
@@ -34,6 +43,10 @@ class EnergyStop:
     # None when no station was found near the route here.
     station: EnergyStation | None
     distance_from_route_km: float | None
+    # Tank / battery level (% of capacity) expected at this point.
+    level_percent: float | None = None
+    # Search radius (whole km) the station was found within.
+    search_radius_km: int | None = None
 
 
 @dataclass
@@ -56,7 +69,8 @@ class VehicleEnergyProfile:
     reserve_km: float
 
 
-StationFinder = Callable[[float, float], list[EnergyStation]]
+# (latitude, longitude, radius_km) -> stations within that radius.
+StationFinder = Callable[[float, float, float], list[EnergyStation]]
 
 
 def vehicle_energy_profile(
@@ -155,15 +169,36 @@ def point_at_distance(
     return coordinates[index]
 
 
+def search_levels(reserve_percent: float) -> list[tuple[float, int]]:
+    """
+    (level %, largest radius km) to try for each stop, in order: the reserve
+    level, then earlier (fuller) up to 40%, then later (emptier) down to 5%.
+    """
+
+    earlier = [reserve_percent]
+    while earlier[-1] + LEVEL_STEP_PERCENT <= EARLIEST_LEVEL_PERCENT + 1e-9:
+        earlier.append(earlier[-1] + LEVEL_STEP_PERCENT)
+
+    later = []
+    level = reserve_percent - LEVEL_STEP_PERCENT
+    while level >= LATEST_LEVEL_PERCENT - 1e-9:
+        later.append(level)
+        level -= LEVEL_STEP_PERCENT
+
+    return [(level, EARLY_MAX_RADIUS_KM) for level in earlier] + [
+        (level, LATE_MAX_RADIUS_KM) for level in later
+    ]
+
+
 def plan_energy_stops(
     route_coordinates: list[tuple[float, float]],
     profile: VehicleEnergyProfile,
     find_stations: StationFinder,
 ) -> EnergyPlan:
     """
-    Walk along the route and plan a stop wherever the remaining range would
-    drop into the reserve. Each stop uses the station closest to the route
-    near that point; if none is found, earlier points are tried.
+    Walk along the route and plan a stop wherever the tank / battery would
+    drop to the reserve level. See search_levels for where stations are
+    looked for; after each stop the vehicle is refilled.
 
     `route_coordinates` are (latitude, longitude) pairs.
     """
@@ -178,9 +213,13 @@ def plan_energy_stops(
 
     distances = cumulative_distances(route_coordinates)
     total_km = distances[-1]
+    reserve_percent = profile.reserve_km / profile.full_range_km * 100
+    levels = search_levels(reserve_percent)
 
     stops: list[EnergyStop] = []
     warnings: list[str] = []
+    # Route points (km) where the station service didn't answer.
+    busy: list[float] = []
 
     position_km = 0.0
     range_left_km = profile.initial_range_km
@@ -197,18 +236,41 @@ def plan_energy_stops(
             )
             break
 
-        target_km = max(reach_km, position_km)
         stop = _find_stop(
             route_coordinates,
             distances,
-            target_km,
-            earliest_km=position_km,
+            position_km=position_km,
+            range_left_km=range_left_km,
+            full_range_km=profile.full_range_km,
+            total_km=total_km,
+            levels=levels,
             find_stations=find_stations,
+            busy=busy,
         )
 
-        if stop.station is None:
+        if stop is None:
+            target_km = max(reach_km, position_km)
+            latitude, longitude = point_at_distance(
+                route_coordinates, distances, target_km
+            )
+            stop = EnergyStop(
+                distance_from_start_km=target_km,
+                latitude=latitude,
+                longitude=longitude,
+                station=None,
+                distance_from_route_km=None,
+                level_percent=round(reserve_percent, 1),
+            )
             warnings.append(
-                f"No station found near km {round(target_km)}"
+                f"No station found near km {round(target_km)}, even "
+                f"looking from {round(EARLIEST_LEVEL_PERCENT)}% down to "
+                f"{round(LATEST_LEVEL_PERCENT)}% left"
+            )
+
+        if stop.station is None and busy:
+            warnings.append(
+                "The station search service was busy; try again in a minute "
+                "for a complete plan"
             )
 
         stops.append(stop)
@@ -225,39 +287,68 @@ def plan_energy_stops(
 def _find_stop(
     coordinates: list[tuple[float, float]],
     distances: list[float],
-    target_km: float,
-    earliest_km: float,
+    position_km: float,
+    range_left_km: float,
+    full_range_km: float,
+    total_km: float,
+    levels: list[tuple[float, int]],
     find_stations: StationFinder,
-) -> EnergyStop:
-    for attempt in range(MAX_SEARCH_ATTEMPTS):
-        candidate_km = target_km - attempt * BACKOFF_STEP_KM
+    busy: list[float],
+) -> EnergyStop | None:
+    """
+    Try each (level, max radius) in turn: the route point where the level
+    would be reached, then the nearest station within 1, 2, ... max radius
+    km. One search at the largest radius gives the same answer as growing
+    it 1 km at a time: the nearest station's distance decides the smallest
+    radius that contains it.
+    """
 
-        if candidate_km < earliest_km:
-            break
+    searched: set[tuple[int, int]] = set()
 
-        latitude, longitude = point_at_distance(
-            coordinates,
-            distances,
-            candidate_km,
+    for level_percent, max_radius_km in levels:
+        candidate_km = (
+            position_km + range_left_km - full_range_km * level_percent / 100
         )
-        stations = find_stations(latitude, longitude)
 
-        if stations:
-            station, distance_km = min(
+        # Already below this level (e.g. a low start): look where we are.
+        if candidate_km < position_km:
+            candidate_km = position_km
+            level_percent = range_left_km / full_range_km * 100
+
+        if candidate_km >= total_km:
+            continue
+
+        index = min(bisect_left(distances, candidate_km), len(coordinates) - 1)
+
+        if (index, max_radius_km) in searched:
+            continue
+        searched.add((index, max_radius_km))
+
+        latitude, longitude = coordinates[index]
+
+        try:
+            found = find_stations(latitude, longitude, max_radius_km)
+        except httpx.HTTPError:
+            # The station service is busy: try the next level instead of
+            # failing the whole plan.
+            busy.append(candidate_km)
+            continue
+
+        nearby = sorted(
+            (
                 (
-                    (
-                        station,
-                        calculate_distance_km(
-                            latitude,
-                            longitude,
-                            station.latitude,
-                            station.longitude,
-                        ),
-                    )
-                    for station in stations
-                ),
-                key=lambda pair: pair[1],
-            )
+                    calculate_distance_km(
+                        latitude, longitude, station.latitude, station.longitude
+                    ),
+                    station,
+                )
+                for station in found
+            ),
+            key=lambda pair: pair[0],
+        )
+
+        if nearby and nearby[0][0] <= max_radius_km:
+            distance_km, station = nearby[0]
 
             return EnergyStop(
                 distance_from_start_km=candidate_km,
@@ -265,14 +356,8 @@ def _find_stop(
                 longitude=longitude,
                 station=station,
                 distance_from_route_km=distance_km,
+                level_percent=round(level_percent, 1),
+                search_radius_km=max(1, math.ceil(distance_km)),
             )
 
-    latitude, longitude = point_at_distance(coordinates, distances, target_km)
-
-    return EnergyStop(
-        distance_from_start_km=target_km,
-        latitude=latitude,
-        longitude=longitude,
-        station=None,
-        distance_from_route_km=None,
-    )
+    return None

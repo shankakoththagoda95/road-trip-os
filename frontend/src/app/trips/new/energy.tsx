@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { errorMessage } from '@/api/client';
-import { type EnergyStop, planEnergyStops } from '@/api/routes';
+import { planEnergyStops } from '@/api/routes';
+import { EnergyStopRow } from '@/components/energy/energy-stop-row';
 import { FormField } from '@/components/form/form-field';
 import { PrimaryButton } from '@/components/form/primary-button';
 import { Stepper } from '@/components/form/stepper';
@@ -15,7 +16,6 @@ import { ThemedView } from '@/components/themed-view';
 import { getTripStep } from '@/constants/trip-steps';
 import { Spacing } from '@/constants/theme';
 import { vehicleRangeKm } from '@/constants/vehicles';
-import { useTheme } from '@/hooks/use-theme';
 import { useTripDraft } from '@/hooks/use-trip-draft';
 import {
   buildEnergyRequest,
@@ -237,11 +237,12 @@ export default function EnergyStepScreen() {
                 {plan.stops.length === 1 ? 'stop' : 'stops'}
               </ThemedText>
               {plan.stops.map((stop, index) => (
-                <StopRow
+                <EnergyStopRow
                   key={index}
                   stop={stop}
                   number={index + 1}
                   color={MarkerColors[stopKind]}
+                  ev={isEv}
                 />
               ))}
             </>
@@ -255,43 +256,6 @@ export default function EnergyStepScreen() {
         </View>
       )}
     </WizardStepScreen>
-  );
-}
-
-function StopRow({
-  stop,
-  number,
-  color,
-}: {
-  stop: EnergyStop;
-  number: number;
-  color: string;
-}) {
-  const colors = useTheme();
-  const { station } = stop;
-
-  return (
-    <View style={[styles.stopRow, { borderColor: colors.border }]}>
-      <View style={[styles.stopBadge, { backgroundColor: color }]}>
-        <ThemedText style={styles.stopBadgeText}>{number}</ThemedText>
-      </View>
-
-      <View style={styles.stopText}>
-        <ThemedText type="smallBold">
-          {station?.name ?? 'No station found nearby'}
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          At km {Math.round(stop.distance_from_start_km)}
-          {stop.distance_from_route_km !== null &&
-            ` · ${stop.distance_from_route_km.toFixed(1)} km off route`}
-        </ThemedText>
-        {station && station.details.length > 0 && (
-          <ThemedText type="small" themeColor="textSecondary">
-            {station.details.join(' · ')}
-          </ThemedText>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -350,34 +314,9 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
 
-  stopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderBottomWidth: 1,
-  },
 
-  stopBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
 
-  stopBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-  },
 
-  stopText: {
-    flex: 1,
-    gap: Spacing.half,
-  },
 
   prerequisite: {
     flexDirection: 'row',

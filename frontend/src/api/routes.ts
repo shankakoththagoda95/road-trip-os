@@ -88,6 +88,10 @@ export type EnergyStop = {
   // Null when no station was found near this part of the route.
   station: EnergyStation | null;
   distance_from_route_km: number | null;
+  // Tank / battery level (% of capacity) expected here.
+  level_percent: number | null;
+  // The station is within this many km of the route (1 km steps).
+  search_radius_km: number | null;
 };
 
 export type EnergyPlan = {

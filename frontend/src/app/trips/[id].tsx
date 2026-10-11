@@ -10,8 +10,10 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { ApiError, errorMessage } from '@/api/client';
 import {
+  type EnergyPlan,
   getRouteConditions,
   getRouteFees,
+  planEnergyStops,
   type RoutePoint,
   type RoutePointInput,
   type RoutePreviewRequest,
@@ -22,16 +24,19 @@ import {
   getSavedItinerary,
   getTrip,
   getTripBudget,
+  getTripEv,
+  getTripFuel,
   getTripRoute,
   type Trip,
   type TripRoute,
 } from '@/api/trips';
 import { getVehicle } from '@/api/vehicles';
 import { MealPlanSection } from '@/components/checklist/meal-plan-section';
+import { EnergyStopRow } from '@/components/energy/energy-stop-row';
 import { TripChecklistSection } from '@/components/checklist/trip-checklist-section';
 import { PrimaryButton } from '@/components/form/primary-button';
 import { RouteMap } from '@/components/route-map/route-map';
-import { MarkerColors } from '@/components/route-map/types';
+import { type MapPoint, MarkerColors } from '@/components/route-map/types';
 import { Screen } from '@/components/screen';
 import { TabBar, type TabItem } from '@/components/tab-bar';
 import { TripOverview } from '@/components/trip-overview/trip-overview';
@@ -190,6 +195,8 @@ export default function TripDetailScreen() {
             <TripChecklistSection tripId={trip.id} refreshKey={refreshKey} />
           </>
         );
+      case 'energy':
+        return withRoute((data) => <EnergySection trip={trip} route={data} />);
       case 'fees':
         return withRoute((data) => <FeesSection trip={trip} route={data} />);
       case 'weather':
@@ -233,6 +240,7 @@ type DetailTab =
   | 'itinerary'
   | 'budget'
   | 'vehicle'
+  | 'energy'
   | 'checklist'
   | 'fees'
   | 'weather';
@@ -243,6 +251,7 @@ const DetailTabs: TabItem<DetailTab>[] = [
   { id: 'itinerary', label: 'Itinerary', icon: 'calendar-month-outline' },
   { id: 'budget', label: 'Budget', icon: 'wallet-outline' },
   { id: 'vehicle', label: 'Vehicle', icon: 'car-outline' },
+  { id: 'energy', label: 'Fuel / EV', icon: 'gas-station-outline' },
   {
     id: 'checklist',
     label: 'Meals and Checklist',
@@ -712,6 +721,158 @@ function routeRequest(
     stops: route.points.filter((point) => point.kind === 'stop').map(toInput),
     trip_type: trip.trip_type,
   };
+}
+
+// Reserve and refill levels used by the planner (see Fuel / EV Planning).
+const ReservePercent = 15;
+
+function EnergySection({ trip, route }: { trip: Trip; route: TripRoute }) {
+  const request = routeRequest(trip, route);
+  const vehicleId = trip.vehicle_id;
+
+  const [state, reload] = useAsync(async () => {
+    if (!request || vehicleId === null) return null;
+
+    const vehicle = await getVehicle(vehicleId);
+    const ev = vehicle.fuel_type === 'electric';
+    // The level saved when the trip was created; a full tank otherwise.
+    const startLevel = await (ev
+      ? getTripEv(trip.id).then((saved) => saved.starting_battery_percentage)
+      : getTripFuel(trip.id).then((saved) =>
+          vehicle.tank_capacity
+            ? Math.min(100, (saved.starting_fuel / vehicle.tank_capacity) * 100)
+            : 100,
+        )
+    ).catch(() => 100);
+
+    const plan = await planEnergyStops({
+      ...request,
+      vehicle_id: vehicle.id,
+      start_level_percent: Math.max(1, Math.round(startLevel)),
+      reserve_percent: ReservePercent,
+      refill_to_percent: ev ? 80 : 100,
+    });
+
+    return { vehicle, ev, startLevel, plan };
+  }, [JSON.stringify(request), vehicleId, trip.id]);
+
+  if (vehicleId === null) {
+    return (
+      <Section title="⛽ Fuel / EV plan">
+        <ThemedText type="small" themeColor="textSecondary">
+          No vehicle on this trip. Add one with Edit trip to plan fuel or
+          charging stops.
+        </ThemedText>
+      </Section>
+    );
+  }
+
+  return (
+    <Section title="⛽ Fuel / EV plan">
+      <AsyncContent
+        state={state}
+        loadingLabel="Planning fuel and charging stops…"
+        onRetry={reload}>
+        {(data) =>
+          data === null ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              The route isn&apos;t available right now.
+            </ThemedText>
+          ) : (
+            <EnergyPlanView
+              route={route}
+              vehicleName={data.vehicle.name}
+              ev={data.ev}
+              startLevel={data.startLevel}
+              plan={data.plan}
+            />
+          )
+        }
+      </AsyncContent>
+    </Section>
+  );
+}
+
+function EnergyPlanView({
+  route,
+  vehicleName,
+  ev,
+  startLevel,
+  plan,
+}: {
+  route: TripRoute;
+  vehicleName: string;
+  ev: boolean;
+  startLevel: number;
+  plan: EnergyPlan;
+}) {
+  const kind = ev ? 'charge' : 'fuel';
+  const points: MapPoint[] = [
+    ...route.points.map((point) => ({
+      label: point.location,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      kind: point.kind,
+    })),
+    ...plan.stops.map((stop, index) => ({
+      label: `${index + 1}. ${stop.station?.name ?? 'No station found'}`,
+      latitude: stop.station?.latitude ?? stop.latitude,
+      longitude: stop.station?.longitude ?? stop.longitude,
+      kind: kind as MapPoint['kind'],
+    })),
+  ];
+
+  return (
+    <View style={styles.sectionBody}>
+      <View style={styles.tiles}>
+        <Tile label="Vehicle" value={vehicleName} />
+        <Tile
+          label={ev ? 'Battery range' : 'Tank range'}
+          value={`${Math.round(plan.full_range_km)} km`}
+        />
+        <Tile
+          label={ev ? 'Battery at start' : 'Fuel at start'}
+          value={`${Math.round(startLevel)}%`}
+        />
+        <Tile
+          label={ev ? 'Charging stops' : 'Fuel stops'}
+          value={String(plan.stops.length)}
+        />
+      </View>
+
+      <RouteMap points={points} line={route.geometry?.coordinates} />
+
+      {plan.stops.length === 0 ? (
+        <ThemedText type="small">
+          ✅ No stops needed: the {ev ? 'battery' : 'tank'} covers the whole
+          route with {ReservePercent}% to spare.
+        </ThemedText>
+      ) : (
+        plan.stops.map((stop, index) => (
+          <EnergyStopRow
+            key={index}
+            stop={stop}
+            number={index + 1}
+            color={MarkerColors[kind]}
+            ev={ev}
+          />
+        ))
+      )}
+
+      {plan.warnings.map((warning) => (
+        <ThemedText key={warning} type="small" themeColor="warning">
+          ⚠️ {warning}
+        </ThemedText>
+      ))}
+
+      <ThemedText type="small" themeColor="textSecondary">
+        Stops are planned where the {ev ? 'battery' : 'tank'} reaches{' '}
+        {ReservePercent}%, looking for a station within 1-3 km; if there&apos;s
+        none, up to 40% earlier, and as a last resort down to 5% within 5 km.
+        {ev ? ' Charging to 80% each time.' : ' Filling up each time.'}
+      </ThemedText>
+    </View>
+  );
 }
 
 function FeesSection({ trip, route }: { trip: Trip; route: TripRoute }) {

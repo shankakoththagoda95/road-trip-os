@@ -261,6 +261,10 @@ class EnergyStopResponse(BaseModel):
     longitude: float
     station: EnergyStationResponse | None
     distance_from_route_km: float | None
+    # Tank / battery level (% of capacity) expected here.
+    level_percent: float | None = None
+    # The station is within this many km of the route (1 km steps).
+    search_radius_km: int | None = None
 
 
 class EnergyStopsResponse(BaseModel):

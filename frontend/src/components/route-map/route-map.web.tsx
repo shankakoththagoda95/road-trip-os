@@ -163,8 +163,22 @@ function FitBounds({ positions }: { positions: LatLngTuple[] }) {
     fit();
     // Again once opening animations have finished.
     const settled = setTimeout(fit, 350);
+    // And whenever the map's box changes size (e.g. the page finishes
+    // laying out around it).
+    let lastWidth = map.getContainer().clientWidth;
+    const observer = new ResizeObserver(() => {
+      const width = map.getContainer().clientWidth;
+      if (width !== lastWidth) {
+        lastWidth = width;
+        fit();
+      }
+    });
+    observer.observe(map.getContainer());
 
-    return () => clearTimeout(settled);
+    return () => {
+      clearTimeout(settled);
+      observer.disconnect();
+    };
   }, [map, key]);
 
   return null;
